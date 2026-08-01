@@ -11,7 +11,7 @@
         "@commitlint/config-conventional": "^21.2.0",
         "@types/bun": "^1.3.14",
         "@vectojs/core": "^1.24.0",
-        "@vectojs/danmaku-core": "^0.1.0",
+        "@vectojs/danmaku-core": "0.2.0",
         "@vectojs/ui": "^2.5.0",
         "carryctx": "0.4.4",
         "knip": "^6.29.0",
@@ -480,7 +480,7 @@
 
     "@vectojs/core": ["@vectojs/core@1.27.0", "", { "dependencies": { "@vectojs/animation": "^0.1.1", "@vectojs/layout": "^0.5.0", "@vectojs/math": "^0.1.1", "@vectojs/text": "^0.3.0" } }, "sha512-rxtukhpGGanEIR5tCncAogQVAf7+mB+I223nH2cCNdKTv5CXX1jf7IWTRJiSWZ+jta7HihZ9yXyR76c6O1kXvg=="],
 
-    "@vectojs/danmaku-core": ["@vectojs/danmaku-core@0.1.0", "", {}, "sha512-OHnqDdZKDMcZyTpBjCLCfQeW4K+44RUvoVOHGFYXCc6U2p54C+Ey+ePVNwDvqhcJlhUdHxZXwym+oekycxigJw=="],
+    "@vectojs/danmaku-core": ["@vectojs/danmaku-core@0.2.0", "", {}, "sha512-GokSzhCwOfyZ6khsqT7DJMVU70kzykenQ8Ka2KgS7bS6C/mfv6fgsjEfNbnTJLniQGB0BYS5DSuz96KGbot0mA=="],
 
     "@vectojs/layout": ["@vectojs/layout@0.5.0", "", { "dependencies": { "@vectojs/text": "^0.3.0" } }, "sha512-riVhdoYyinzBZ09xEfrOtwIyEcOlZ+PXnzxmHbnkimIq7XfN+YW6F+VdVogRcht6KXLhjA7zIG0m9EGQ4M58Jw=="],
 
