@@ -109,6 +109,7 @@ function createThroughputPanel(callbacks: {
       capacity: 'Capacity',
       target: 'Target',
       rate: 'Rate',
+      quickTargets: 'Quick targets',
       distribution: 'Distribution',
       framePercentiles: 'Frame percentiles',
       drawSplit: 'Draw split',
@@ -138,6 +139,11 @@ function createThroughputPanel(callbacks: {
       { id: 'draw', label: 'Draw' },
     ],
     targetRange: { min: 0, max: 5000, step: 100 },
+    quickTargets: [
+      { value: 1000, label: '1K' },
+      { value: 2500, label: '2.5K' },
+      { value: 5000, label: '5K' },
+    ],
     rateRange: { min: 1, max: 1000, step: 1 },
     onTargetChange: (value) => callbacks.targets.push(value),
     onRateChange: (value) => callbacks.rates.push(value),
@@ -253,18 +259,21 @@ describe('laboratory panels', () => {
     panel.setAvailableBounds({ width: 420, height: 560 });
     const nodes = descendants(panel);
     const sliders = nodes.filter((entity): entity is Slider => entity instanceof Slider);
-    const distribution = nodes.find(
+    const [quickTargets, distribution] = nodes.filter(
       (entity): entity is RadioGroup => entity instanceof RadioGroup,
-    )!;
+    );
 
     sliders[0]!.emit('change', { value: 900 });
     sliders[1]!.emit('change', { value: 75 });
-    distribution.selectByValue('burst');
+    quickTargets!.selectByValue('5000');
+    distribution!.selectByValue('burst');
 
-    expect(callbacks.targets).toEqual([900]);
+    expect(callbacks.targets).toEqual([900, 5000]);
     expect(callbacks.rates).toEqual([75]);
     expect(callbacks.distributions).toEqual(['burst']);
     expect(sliders.map((slider) => slider.getA11yAttributes().label)).toEqual(['Target', 'Rate']);
+    expect(quickTargets!.options.map((option) => option.label)).toEqual(['1K', '2.5K', '5K']);
+    expect(quickTargets!.value).toBe('5000');
   });
 
   test('InteractionsPanel uses labelled built-in checkboxes and preset semantics', () => {
