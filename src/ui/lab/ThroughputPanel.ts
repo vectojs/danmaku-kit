@@ -13,6 +13,11 @@ export interface ThroughputMetricDefinition<Id extends string> {
   label: string;
 }
 
+export interface ThroughputQuickTarget {
+  value: number;
+  label: string;
+}
+
 export interface ThroughputPanelState<
   DistributionId extends string,
   FrameMetricId extends string,
@@ -32,6 +37,7 @@ export interface ThroughputPanelLabels {
   capacity: string;
   target: string;
   rate: string;
+  quickTargets?: string;
   distribution: string;
   framePercentiles: string;
   drawSplit: string;
@@ -53,6 +59,7 @@ export interface ThroughputPanelOptions<
   frameMetrics: ReadonlyArray<Readonly<ThroughputMetricDefinition<FrameMetricId>>>;
   drawMetrics: ReadonlyArray<Readonly<ThroughputMetricDefinition<DrawMetricId>>>;
   targetRange: Readonly<{ min: number; max: number; step: number }>;
+  quickTargets?: ReadonlyArray<Readonly<ThroughputQuickTarget>>;
   rateRange: Readonly<{ min: number; max: number; step: number }>;
   onTargetChange: (target: number) => void;
   onRateChange: (rate: number) => void;
@@ -67,6 +74,7 @@ export class ThroughputPanel<
   private readonly capacityValue: Text;
   private readonly targetValue: Text;
   private readonly rateValue: Text;
+  private readonly quickTargetGroup: RadioGroup | null;
   private readonly targetSlider: Slider;
   private readonly rateSlider: Slider;
   private readonly distributionGroup: RadioGroup;
@@ -81,6 +89,31 @@ export class ThroughputPanel<
 
     this.capacityValue = this.addValue(options.labels.capacity);
     this.targetValue = this.addValue(options.labels.target);
+    const quickTargets = options.quickTargets ?? [];
+    this.quickTargetGroup =
+      quickTargets.length > 0
+        ? new RadioGroup({
+            options: quickTargets.map((target) => ({
+              value: String(target.value),
+              label: target.label,
+            })),
+            value: quickTargets.some((target) => target.value === options.state.target)
+              ? String(options.state.target)
+              : '',
+            direction: 'horizontal',
+            gap: 16,
+            font: options.theme.fontUi,
+            color: options.theme.text,
+            accent: options.theme.accent,
+            border: options.theme.border,
+            onChange: (value) => options.onTargetChange(Number(value)),
+          })
+        : null;
+    if (this.quickTargetGroup) {
+      this.addHeading(options.labels.quickTargets ?? options.labels.target);
+      this.content.add(this.quickTargetGroup);
+    }
+
     this.targetSlider = new Slider({
       ...options.targetRange,
       value: options.state.target,
@@ -143,6 +176,13 @@ export class ThroughputPanel<
     this.capacityValue.setText(`${labels.capacity}: ${labels.formatCapacity(state.capacity)}`);
     this.targetValue.setText(`${labels.target}: ${labels.formatTarget(state.target)}`);
     this.rateValue.setText(`${labels.rate}: ${labels.formatRate(state.rate)}`);
+    if (this.quickTargetGroup) {
+      this.quickTargetGroup.value = this.options.quickTargets?.some(
+        (target) => target.value === state.target,
+      )
+        ? String(state.target)
+        : '';
+    }
     this.targetSlider.value = state.target;
     this.rateSlider.value = state.rate;
     this.distributionGroup.value = state.distributionId;
@@ -173,6 +213,11 @@ export class ThroughputPanel<
     this.distributionGroup.color = forced ? 'CanvasText' : theme.text;
     this.distributionGroup.accent = forced ? 'Highlight' : theme.accent;
     this.distributionGroup.border = forced ? 'CanvasText' : theme.border;
+    if (this.quickTargetGroup) {
+      this.quickTargetGroup.color = forced ? 'CanvasText' : theme.text;
+      this.quickTargetGroup.accent = forced ? 'Highlight' : theme.accent;
+      this.quickTargetGroup.border = forced ? 'CanvasText' : theme.border;
+    }
   }
 
   private addHeading(label: string): Text {

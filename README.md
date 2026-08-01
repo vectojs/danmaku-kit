@@ -82,6 +82,8 @@ Call `setStatus`, `setPlaybackState`, `setWidth`, and `setCompact` when app stat
 
 `DanmakuLabDrawer` receives application-owned panel instances and uses the native `@vectojs/ui` `Tabs` semantics. Its bounds are local and placement-agnostic: the host sets its position and passes the exact available width/height. Generic `VideosPanel`, `ThroughputPanel`, `InteractionsPanel`, and `DevToolsInfoPanel` consume injected rows, state, labels, and callbacks.
 
+`ThroughputPanel` accepts optional injected `quickTargets` for device-specific workload presets while retaining its bounded target slider for custom values. The panel emits both paths through the same `onTargetChange` callback.
+
 ## Theme, labels, and accessibility
 
 Pass a complete `DanmakuKitTheme` and localized `DanmakuKitLabels` to product surfaces. The defaults are neutral, accessible English values for smoke scenes; they are not product branding.
@@ -90,13 +92,13 @@ Controls use VectoJS Input, Button, Slider, Dropdown, Checkbox, RadioGroup, Tabs
 
 ## Ownership boundary
 
-| `danmaku-kit` owns | The application owns |
-| --- | --- |
-| Track-profile contracts and deterministic builder | Concrete profile values and comment content |
-| Generic video identity/load/error contracts | Catalog URLs, licensing metadata, media elements, persistence |
+| `danmaku-kit` owns                                  | The application owns                                               |
+| --------------------------------------------------- | ------------------------------------------------------------------ |
+| Track-profile contracts and deterministic builder   | Concrete profile values and comment content                        |
+| Generic video identity/load/error contracts         | Catalog URLs, licensing metadata, media elements, persistence      |
 | Themeable status, command, drawer, and Lab controls | Brand theme, localized copy, layout placement, state orchestration |
-| Typed metrics/distribution inputs | Renderer counters, pool scans, profiler collection |
-| Production-safe DevTools information panel | Dynamic `@vectojs/devtools` import and app plugin |
+| Typed metrics/distribution inputs                   | Renderer counters, pool scans, profiler collection                 |
+| Production-safe DevTools information panel          | Dynamic `@vectojs/devtools` import and app plugin                  |
 
 The package never imports an application or `@vectojs/devtools`. The `/model` entry has no VectoJS UI, DOM, storage, or catalog dependency.
 
