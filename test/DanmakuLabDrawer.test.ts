@@ -90,7 +90,8 @@ describe('DanmakuLabDrawer', () => {
     const tabs = nodes.find((entity): entity is Tabs => entity instanceof Tabs)!;
     const close = nodes.find(
       (entity): entity is Button =>
-        entity instanceof Button && entity.getA11yAttributes().label === DEFAULT_DANMAKU_KIT_LABELS.lab.close,
+        entity instanceof Button &&
+        entity.getA11yAttributes().label === DEFAULT_DANMAKU_KIT_LABELS.lab.close,
     )!;
 
     const tabNodes = descendants(tabs).filter(

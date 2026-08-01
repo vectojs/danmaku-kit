@@ -131,7 +131,7 @@ class PlaybackRateDropdown extends Dropdown {
     this.scene?.markDirty({ entity: this.id, reason: 'rate-synced' });
   }
 
-  public override getA11yAttributes(): A11yAttributes {
+  public override getA11yAttributes() {
     return {
       ...super.getA11yAttributes(),
       disabled: this.playbackDisabled ? true : undefined,
@@ -332,6 +332,10 @@ export class DanmakuCommandDeck extends Entity {
       rate: this.boundsOf(this.rate),
       lab: this.boundsOf(this.labButton),
     };
+  }
+
+  public isPointInside(_globalX: number, _globalY: number): boolean {
+    return false;
   }
 
   public render(renderer: IRenderer): void {

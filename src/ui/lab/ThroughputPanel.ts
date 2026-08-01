@@ -74,7 +74,9 @@ export class ThroughputPanel<
   private readonly drawValues = new Map<DrawMetricId, Text>();
   private readonly texts: Text[] = [];
 
-  constructor(private readonly options: ThroughputPanelOptions<DistributionId, FrameMetricId, DrawMetricId>) {
+  constructor(
+    private readonly options: ThroughputPanelOptions<DistributionId, FrameMetricId, DrawMetricId>,
+  ) {
     super(options.labels.panel, options.labels.scroll);
 
     this.capacityValue = this.addValue(options.labels.capacity);

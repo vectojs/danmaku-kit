@@ -23,9 +23,7 @@ function labelledControlNames(root: Entity): Array<string | undefined> {
     .map((attributes) => attributes.label);
 }
 
-const loadStateLabel = (
-  state: Readonly<Exclude<VideoLoadState, { status: 'error' }>>,
-): string => {
+const loadStateLabel = (state: Readonly<Exclude<VideoLoadState, { status: 'error' }>>): string => {
   if (state.status === 'loading') return `Loading ${state.progress ?? 0}`;
   return state.status === 'ready' ? 'Ready' : 'Idle';
 };
@@ -184,7 +182,11 @@ function createInteractionsPanel(callbacks: {
 
 describe('laboratory panels', () => {
   test('VideosPanel uses injected catalog/profile data and routes custom, Choose, and Retry callbacks', () => {
-    const callbacks = { choices: [] as unknown[], retries: [] as number[], customUrls: [] as string[] };
+    const callbacks = {
+      choices: [] as unknown[],
+      retries: [] as number[],
+      customUrls: [] as string[],
+    };
     const panel = createVideosPanel(callbacks);
     panel.setAvailableBounds({ width: 374, height: 560 });
     const nodes = descendants(panel);
@@ -198,9 +200,7 @@ describe('laboratory panels', () => {
       (entity): entity is Button =>
         entity instanceof Button && entity.getA11yAttributes().label === 'Retry load',
     )!;
-    const scroll = nodes.find(
-      (entity): entity is ScrollView => entity instanceof ScrollView,
-    )!;
+    const scroll = nodes.find((entity): entity is ScrollView => entity instanceof ScrollView)!;
     const initialContentHeight = scroll.content.height;
     expect(
       nodes
@@ -213,7 +213,9 @@ describe('laboratory panels', () => {
     expect(
       nodes
         .filter((entity): entity is Text => entity instanceof Text)
-        .some((text) => text.getContentProjection()?.text === 'Resolution 1080p\nDuration 10 minutes'),
+        .some(
+          (text) => text.getContentProjection()?.text === 'Resolution 1080p\nDuration 10 minutes',
+        ),
     ).toBe(true);
     const sourceContentHeight = scroll.content.height;
     groups[1]!.selectByValue('profile:1');
@@ -242,7 +244,11 @@ describe('laboratory panels', () => {
   });
 
   test('ThroughputPanel consumes injected metrics and routes only control values', () => {
-    const callbacks = { targets: [] as number[], rates: [] as number[], distributions: [] as string[] };
+    const callbacks = {
+      targets: [] as number[],
+      rates: [] as number[],
+      distributions: [] as string[],
+    };
     const panel = createThroughputPanel(callbacks);
     panel.setAvailableBounds({ width: 420, height: 560 });
     const nodes = descendants(panel);
@@ -299,9 +305,7 @@ describe('laboratory panels', () => {
       onReload: () => reloads.push(1),
     });
     panel.setAvailableBounds({ width: 420, height: 300 });
-    const reload = descendants(panel).find(
-      (entity): entity is Button => entity instanceof Button,
-    )!;
+    const reload = descendants(panel).find((entity): entity is Button => entity instanceof Button)!;
     expect(reload.getA11yAttributes()).toMatchObject({
       role: 'button',
       label: 'Reload inspector',
@@ -315,19 +319,24 @@ describe('laboratory panels', () => {
     expect(reload.getA11yAttributes().disabled).toBeUndefined();
   });
 
-  test.each([420, 374])('keeps one ScrollView owner and named controls at %ipx', (width: number) => {
-    const videos = createVideosPanel({ choices: [], retries: [], customUrls: [] });
-    const throughput = createThroughputPanel({ targets: [], rates: [], distributions: [] });
-    const interactions = createInteractionsPanel({ presets: [], effects: [] });
-    const panels = [videos, throughput, interactions];
+  test.each([420, 374])(
+    'keeps one ScrollView owner and named controls at %ipx',
+    (width: number) => {
+      const videos = createVideosPanel({ choices: [], retries: [], customUrls: [] });
+      const throughput = createThroughputPanel({ targets: [], rates: [], distributions: [] });
+      const interactions = createInteractionsPanel({ presets: [], effects: [] });
+      const panels = [videos, throughput, interactions];
 
-    for (const panel of panels) {
-      panel.setAvailableBounds({ width, height: 560 });
-      expect(panel.width).toBe(width);
-      expect(descendants(panel).filter((entity) => entity instanceof ScrollView)).toHaveLength(1);
-      expect(labelledControlNames(panel).every((label) => typeof label === 'string' && label.length > 0)).toBe(
-        true,
-      );
-    }
-  });
+      for (const panel of panels) {
+        panel.setAvailableBounds({ width, height: 560 });
+        expect(panel.width).toBe(width);
+        expect(descendants(panel).filter((entity) => entity instanceof ScrollView)).toHaveLength(1);
+        expect(
+          labelledControlNames(panel).every(
+            (label) => typeof label === 'string' && label.length > 0,
+          ),
+        ).toBe(true);
+      }
+    },
+  );
 });

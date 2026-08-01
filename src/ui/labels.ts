@@ -37,9 +37,9 @@ export const DEFAULT_DANMAKU_KIT_LABELS: Readonly<DanmakuKitLabels> = Object.fre
     loading: 'Loading',
     paused: 'Paused',
     error: 'Error',
-    activeSummary: (active, capacity) =>
+    activeSummary: (active: number, capacity: number) =>
       `${active.toLocaleString()} of ${capacity.toLocaleString()}`,
-    fpsSummary: (fps) => `${fps.toFixed(1)} frames per second`,
+    fpsSummary: (fps: number) => `${fps.toFixed(1)} frames per second`,
   },
   command: {
     inputPlaceholder: 'Send a danmaku',

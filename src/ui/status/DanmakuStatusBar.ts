@@ -142,6 +142,10 @@ export class DanmakuStatusBar extends Entity {
     };
   }
 
+  public isPointInside(_globalX: number, _globalY: number): boolean {
+    return false;
+  }
+
   public render(renderer: IRenderer): void {
     const forcedColors = this.scene?.forcedColors ?? false;
     const surface = forcedColors ? 'Canvas' : this.theme.surface;

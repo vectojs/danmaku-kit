@@ -34,7 +34,8 @@ export class DanmakuLabDrawer<TabId extends string> extends UIComponent {
 
   constructor(private readonly options: DanmakuLabDrawerOptions<TabId>) {
     super();
-    if (options.panels.length === 0) throw new Error('DanmakuLabDrawer requires at least one panel');
+    if (options.panels.length === 0)
+      throw new Error('DanmakuLabDrawer requires at least one panel');
     if (!options.panels.some((tab) => tab.id === options.activeTab)) {
       throw new Error('DanmakuLabDrawer activeTab must identify an injected panel');
     }

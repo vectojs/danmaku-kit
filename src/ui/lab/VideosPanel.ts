@@ -26,7 +26,6 @@ export interface VideoProfileRow<ProfileId extends string> {
   description: string;
 }
 
-
 export interface VideosPanelState<ProfileId extends string> {
   source: VideoSelection;
   profileId: ProfileId;
@@ -46,9 +45,7 @@ export interface VideosPanelLabels {
   choose: string;
   retry: string;
   loadState: string;
-  formatLoadState: (
-    state: Readonly<Exclude<VideoLoadState, { status: 'error' }>>,
-  ) => string;
+  formatLoadState: (state: Readonly<Exclude<VideoLoadState, { status: 'error' }>>) => string;
   formatLoadError: (error: Readonly<VideoSourceError>, candidateId: string | undefined) => string;
   formatMetadata: (rows: ReadonlyArray<Readonly<VideoMetadataRow>>) => string;
   formatAttribution: (attribution: string) => string;
@@ -95,7 +92,10 @@ export class VideosPanel<ProfileId extends string> extends LabPanel<VideosPanelS
     this.addHeading(options.labels.videos);
     this.sourceGroup = new RadioGroup({
       options: [
-        ...options.catalog.map((row, index) => ({ value: this.catalogValue(index), label: row.title })),
+        ...options.catalog.map((row, index) => ({
+          value: this.catalogValue(index),
+          label: row.title,
+        })),
         { value: CUSTOM_SOURCE_VALUE, label: options.labels.customSource },
       ],
       value: this.valueForSource(options.state.source),
@@ -202,10 +202,7 @@ export class VideosPanel<ProfileId extends string> extends LabPanel<VideosPanelS
     this.attribution.setText(this.options.labels.formatAttribution(video?.attribution ?? ''));
     this.loadState.setText(
       state.loadState.status === 'error'
-        ? this.options.labels.formatLoadError(
-            state.loadState.error,
-            state.loadState.candidateId,
-          )
+        ? this.options.labels.formatLoadError(state.loadState.error, state.loadState.candidateId)
         : this.options.labels.formatLoadState(state.loadState),
     );
     this.retryButton.disabled = state.loadState.status !== 'error';
@@ -272,7 +269,12 @@ export class VideosPanel<ProfileId extends string> extends LabPanel<VideosPanelS
   }
 
   private valueForProfile(profileId: ProfileId): string {
-    return this.profileValue(Math.max(0, this.options.profiles.findIndex((row) => row.id === profileId)));
+    return this.profileValue(
+      Math.max(
+        0,
+        this.options.profiles.findIndex((row) => row.id === profileId),
+      ),
+    );
   }
 
   private catalogValue(index: number): string {
