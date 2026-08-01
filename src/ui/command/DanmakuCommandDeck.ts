@@ -259,6 +259,7 @@ export class DanmakuCommandDeck extends Entity {
             this.labButton,
             this.labOpen ? this.labels.command.closeLab : this.labels.command.openLab,
           );
+          this.scene?.markDirty({ entity: this.id, reason: 'lab-toggled' });
           this.callbacks.onToggleLab();
         },
       },
@@ -335,6 +336,7 @@ export class DanmakuCommandDeck extends Entity {
 
   public render(renderer: IRenderer): void {
     const forcedColors = this.scene?.forcedColors ?? false;
+    this.elapsed.color = forcedColors ? 'CanvasText' : this.theme.textMuted;
     renderer.beginPath();
     renderer.roundRect(0, 0, this.width, this.height, this.theme.radius);
     renderer.fill(forcedColors ? 'Canvas' : this.theme.surface);

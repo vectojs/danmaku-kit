@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, mock } from 'bun:test';
+import type { IRenderer } from '@vectojs/core';
 import { Button, Dropdown, Input, Slider, Text } from '@vectojs/ui';
 import {
   DanmakuCommandDeck,
@@ -185,5 +186,48 @@ describe('DanmakuCommandDeck', () => {
     expect(calls.playPause).toBe(1);
     expect(calls.seeks).toEqual([42]);
     expect(calls.rates).toEqual([2]);
+  });
+
+  it('repaints elapsed text with a system color when forced colors changes', () => {
+    const { deck } = createDeck();
+    const { elapsed } = controls(deck);
+    const sceneState = {
+      forcedColors: true,
+      markDirty() {},
+    };
+    // Entity has no public scene setter; this emulates a mounted forced-colors scene.
+    const mountedDeck = deck as unknown as { _scene: typeof sceneState };
+    mountedDeck._scene = sceneState;
+    const renderer = {
+      beginPath() {},
+      roundRect() {},
+      fill() {},
+      stroke() {},
+    } as unknown as IRenderer;
+
+    deck.render(renderer);
+    expect(elapsed.color).toBe('CanvasText');
+
+    sceneState.forcedColors = false;
+    deck.render(renderer);
+    expect(elapsed.color).toBe(DEFAULT_DANMAKU_KIT_THEME.textMuted);
+  });
+
+  it('marks an on-demand scene dirty after toggling the Lab label', () => {
+    const { deck, calls } = createDeck();
+    const markDirty = mock((_change?: { entity: string; reason: string }) => {});
+    const sceneState = { forcedColors: false, markDirty };
+    // Entity has no public scene setter; this emulates a mounted on-demand scene.
+    const mountedDeck = deck as unknown as { _scene: typeof sceneState };
+    mountedDeck._scene = sceneState;
+    const lab = controls(deck).buttons.find(
+      (button) => button.label === DEFAULT_DANMAKU_KIT_LABELS.command.openLab,
+    )!;
+
+    lab.emit('click', {});
+
+    expect(lab.label).toBe(DEFAULT_DANMAKU_KIT_LABELS.command.closeLab);
+    expect(calls.lab).toBe(1);
+    expect(markDirty).toHaveBeenCalledWith({ entity: deck.id, reason: 'lab-toggled' });
   });
 });
