@@ -55,29 +55,33 @@ function createDrawer(open = true): {
 }
 
 describe('DanmakuLabDrawer', () => {
-  test.each([420, 374])('reflows existing panels within %ipx available width', (width: number) => {
-    const { drawer, panels } = createDrawer();
+  test.each([420, 374, 1200])(
+    'uses the supplied %ipx local width without owning placement',
+    (width: number) => {
+      const { drawer, panels } = createDrawer();
 
-    drawer.setAvailableBounds({ width, height: 700 });
+      drawer.setAvailableBounds({ width, height: 700 });
 
-    expect(drawer.width).toBe(width);
-    expect(drawer.x).toBe(0);
-    const tabs = descendants(drawer).find((entity): entity is Tabs => entity instanceof Tabs);
-    expect(tabs).toBeDefined();
-    const close = descendants(drawer).find(
-      (entity): entity is Button =>
-        entity instanceof Button &&
-        entity.getA11yAttributes().label === DEFAULT_DANMAKU_KIT_LABELS.lab.close,
-    );
-    expect(close).toBeDefined();
-    expect(close!.x + close!.width).toBeLessThanOrEqual(drawer.width);
-    expect(tabs!.x + tabs!.width).toBeLessThanOrEqual(drawer.width);
-    expect(tabs!.height).toBeGreaterThan(0);
-    for (const panel of panels) {
-      expect(panel.width).toBe(tabs!.width);
-      expect(panel.height).toBe(tabs!.height - tabs!.effectiveTabBarHeight);
-    }
-  });
+      expect(drawer.width).toBe(width);
+      expect(drawer.x).toBe(0);
+      expect(drawer.y).toBe(0);
+      const tabs = descendants(drawer).find((entity): entity is Tabs => entity instanceof Tabs);
+      expect(tabs).toBeDefined();
+      const close = descendants(drawer).find(
+        (entity): entity is Button =>
+          entity instanceof Button &&
+          entity.getA11yAttributes().label === DEFAULT_DANMAKU_KIT_LABELS.lab.close,
+      );
+      expect(close).toBeDefined();
+      expect(close!.x + close!.width).toBeLessThanOrEqual(drawer.width);
+      expect(tabs!.x + tabs!.width).toBeLessThanOrEqual(drawer.width);
+      expect(tabs!.height).toBeGreaterThan(0);
+      for (const panel of panels) {
+        expect(panel.width).toBe(tabs!.width);
+        expect(panel.height).toBe(tabs!.height - tabs!.effectiveTabBarHeight);
+      }
+    },
+  );
 
   test('uses Tabs semantics and routes tab and visible close actions', () => {
     const { drawer, activeChanges, openChanges } = createDrawer();

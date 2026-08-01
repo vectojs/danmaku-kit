@@ -21,18 +21,16 @@ export interface DanmakuLabDrawerOptions<TabId extends string> {
   panels: ReadonlyArray<Readonly<DanmakuLabTab<TabId>>>;
   open: boolean;
   activeTab: TabId;
-  maxWidth?: number;
   onOpenChange: (open: boolean) => void;
   onActiveTabChange: (tabId: TabId) => void;
 }
 
-/** A responsive right-edge drawer that keeps injected panel instances alive. */
+/** A placement-agnostic drawer surface that keeps injected panel instances alive. */
 export class DanmakuLabDrawer<TabId extends string> extends UIComponent {
   private readonly title: Text;
   private readonly closeButton: Button;
   private readonly tabs: Tabs;
   private open: boolean;
-  private availableBounds: LabAvailableBounds = { width: 0, height: 0 };
 
   constructor(private readonly options: DanmakuLabDrawerOptions<TabId>) {
     super();
@@ -105,23 +103,18 @@ export class DanmakuLabDrawer<TabId extends string> extends UIComponent {
   }
 
   setAvailableBounds(bounds: Readonly<LabAvailableBounds>): void {
-    this.availableBounds = {
-      width: Math.max(0, bounds.width),
-      height: Math.max(0, bounds.height),
-    };
-    const drawerWidth = Math.min(this.options.maxWidth ?? 420, this.availableBounds.width);
-    this.width = drawerWidth;
-    this.height = this.availableBounds.height;
-    this.x = this.availableBounds.width - drawerWidth;
+    this.width = Math.max(0, bounds.width);
+    this.height = Math.max(0, bounds.height);
+    this.x = 0;
     this.y = 0;
 
     const padding = 12;
     const headerHeight = 40;
-    const innerWidth = Math.max(0, drawerWidth - padding * 2);
+    const innerWidth = Math.max(0, this.width - padding * 2);
     this.title.x = padding;
     this.title.y = padding + 8;
     this.title.setMaxWidth(Math.max(1, innerWidth - this.closeButton.width - 12));
-    this.closeButton.x = Math.max(padding, drawerWidth - padding - this.closeButton.width);
+    this.closeButton.x = Math.max(padding, this.width - padding - this.closeButton.width);
     this.closeButton.y = padding;
 
     this.tabs.x = padding;
