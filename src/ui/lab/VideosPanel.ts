@@ -1,5 +1,12 @@
 import { Button, Input, RadioGroup, Text } from '@vectojs/ui';
 
+import type {
+  VideoLoadState,
+  VideoSelection,
+  VideoSourceDescriptor,
+  VideoSourceError,
+} from '../../model';
+
 import type { DanmakuKitTheme } from '../theme';
 import { LabPanel } from './LabPanel';
 
@@ -8,9 +15,7 @@ export interface VideoMetadataRow {
   value: string;
 }
 
-export interface VideoCatalogRow<VideoId extends string> {
-  id: VideoId;
-  label: string;
+export interface VideoCatalogRow extends VideoSourceDescriptor {
   metadata: ReadonlyArray<Readonly<VideoMetadataRow>>;
   attribution: string;
 }
@@ -21,18 +26,9 @@ export interface VideoProfileRow<ProfileId extends string> {
   description: string;
 }
 
-export type VideoSourceSelection<VideoId extends string> =
-  | { kind: 'catalog'; videoId: VideoId }
-  | { kind: 'custom'; url: string };
 
-export type VideoLoadState =
-  | { status: 'idle' }
-  | { status: 'loading'; progress: number | null }
-  | { status: 'ready' }
-  | { status: 'error'; message: string };
-
-export interface VideosPanelState<VideoId extends string, ProfileId extends string> {
-  source: VideoSourceSelection<VideoId>;
+export interface VideosPanelState<ProfileId extends string> {
+  source: VideoSelection;
   profileId: ProfileId;
   loadState: VideoLoadState;
 }
@@ -50,32 +46,33 @@ export interface VideosPanelLabels {
   choose: string;
   retry: string;
   loadState: string;
-  formatLoadState: (state: Readonly<VideoLoadState>) => string;
+  formatLoadState: (
+    state: Readonly<Exclude<VideoLoadState, { status: 'error' }>>,
+  ) => string;
+  formatLoadError: (error: Readonly<VideoSourceError>, candidateId: string | undefined) => string;
   formatMetadata: (rows: ReadonlyArray<Readonly<VideoMetadataRow>>) => string;
   formatAttribution: (attribution: string) => string;
 }
 
-export interface VideosPanelSelection<VideoId extends string, ProfileId extends string> {
-  source: VideoSourceSelection<VideoId>;
+export interface VideosPanelSelection<ProfileId extends string> {
+  source: VideoSelection;
   profileId: ProfileId;
 }
 
-export interface VideosPanelOptions<VideoId extends string, ProfileId extends string> {
+export interface VideosPanelOptions<ProfileId extends string> {
   theme: Readonly<DanmakuKitTheme>;
   labels: Readonly<VideosPanelLabels>;
-  state: Readonly<VideosPanelState<VideoId, ProfileId>>;
-  catalog: ReadonlyArray<Readonly<VideoCatalogRow<VideoId>>>;
+  state: Readonly<VideosPanelState<ProfileId>>;
+  catalog: ReadonlyArray<Readonly<VideoCatalogRow>>;
   profiles: ReadonlyArray<Readonly<VideoProfileRow<ProfileId>>>;
-  onChoose: (selection: Readonly<VideosPanelSelection<VideoId, ProfileId>>) => void;
+  onChoose: (selection: Readonly<VideosPanelSelection<ProfileId>>) => void;
   onRetry: () => void;
   onCustomUrlChange?: (url: string) => void;
 }
 
 const CUSTOM_SOURCE_VALUE = 'custom';
 
-export class VideosPanel<VideoId extends string, ProfileId extends string> extends LabPanel<
-  VideosPanelState<VideoId, ProfileId>
-> {
+export class VideosPanel<ProfileId extends string> extends LabPanel<VideosPanelState<ProfileId>> {
   private readonly sourceGroup: RadioGroup;
   private readonly profileGroup: RadioGroup;
   private readonly customUrlInput: Input;
@@ -87,10 +84,10 @@ export class VideosPanel<VideoId extends string, ProfileId extends string> exten
   private readonly retryButton: Button;
   private readonly texts: Text[] = [];
 
-  private pendingSource: VideoSourceSelection<VideoId>;
+  private pendingSource: VideoSelection;
   private pendingProfileId: ProfileId;
 
-  constructor(private readonly options: VideosPanelOptions<VideoId, ProfileId>) {
+  constructor(private readonly options: VideosPanelOptions<ProfileId>) {
     super(options.labels.panel, options.labels.scroll);
     this.pendingSource = options.state.source;
     this.pendingProfileId = options.state.profileId;
@@ -98,7 +95,7 @@ export class VideosPanel<VideoId extends string, ProfileId extends string> exten
     this.addHeading(options.labels.videos);
     this.sourceGroup = new RadioGroup({
       options: [
-        ...options.catalog.map((row, index) => ({ value: this.catalogValue(index), label: row.label })),
+        ...options.catalog.map((row, index) => ({ value: this.catalogValue(index), label: row.title })),
         { value: CUSTOM_SOURCE_VALUE, label: options.labels.customSource },
       ],
       value: this.valueForSource(options.state.source),
@@ -187,7 +184,7 @@ export class VideosPanel<VideoId extends string, ProfileId extends string> exten
     this.relayoutContent();
   }
 
-  override setState(state: Readonly<VideosPanelState<VideoId, ProfileId>>): void {
+  override setState(state: Readonly<VideosPanelState<ProfileId>>): void {
     const source = state.source;
     this.pendingSource = source;
     this.pendingProfileId = state.profileId;
@@ -197,13 +194,20 @@ export class VideosPanel<VideoId extends string, ProfileId extends string> exten
 
     const video =
       source.kind === 'catalog'
-        ? this.options.catalog.find((row) => row.id === source.videoId)
+        ? this.options.catalog.find((row) => row.id === source.id)
         : undefined;
     const profile = this.options.profiles.find((row) => row.id === state.profileId);
     this.profileDetails.setText(profile?.description ?? '');
     this.metadata.setText(this.options.labels.formatMetadata(video?.metadata ?? []));
     this.attribution.setText(this.options.labels.formatAttribution(video?.attribution ?? ''));
-    this.loadState.setText(this.options.labels.formatLoadState(state.loadState));
+    this.loadState.setText(
+      state.loadState.status === 'error'
+        ? this.options.labels.formatLoadError(
+            state.loadState.error,
+            state.loadState.candidateId,
+          )
+        : this.options.labels.formatLoadState(state.loadState),
+    );
     this.retryButton.disabled = state.loadState.status !== 'error';
     this.chooseButton.disabled = source.kind === 'custom' && source.url.trim().length === 0;
     this.relayoutContent();
@@ -243,7 +247,7 @@ export class VideosPanel<VideoId extends string, ProfileId extends string> exten
     const index = Number(value.slice('catalog:'.length));
     const row = this.options.catalog[index];
     if (row) {
-      this.pendingSource = { kind: 'catalog', videoId: row.id };
+      this.pendingSource = { kind: 'catalog', id: row.id };
       this.chooseButton.disabled = false;
       this.metadata.setText(this.options.labels.formatMetadata(row.metadata));
       this.attribution.setText(this.options.labels.formatAttribution(row.attribution));
@@ -261,9 +265,9 @@ export class VideosPanel<VideoId extends string, ProfileId extends string> exten
     }
   }
 
-  private valueForSource(source: Readonly<VideoSourceSelection<VideoId>>): string {
+  private valueForSource(source: Readonly<VideoSelection>): string {
     if (source.kind === 'custom') return CUSTOM_SOURCE_VALUE;
-    const index = this.options.catalog.findIndex((row) => row.id === source.videoId);
+    const index = this.options.catalog.findIndex((row) => row.id === source.id);
     return this.catalogValue(Math.max(0, index));
   }
 

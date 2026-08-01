@@ -2,10 +2,11 @@ import { describe, expect, test } from 'bun:test';
 import { Entity, VectoJSEvent } from '@vectojs/core';
 import { Button, Checkbox, Input, RadioGroup, ScrollView, Slider, Text } from '@vectojs/ui';
 
+import { VideoSourceError, type VideoLoadState } from '../src/model';
 import { DevToolsInfoPanel } from '../src/ui/lab/DevToolsInfoPanel';
 import { InteractionsPanel } from '../src/ui/lab/InteractionsPanel';
 import { ThroughputPanel } from '../src/ui/lab/ThroughputPanel';
-import { VideosPanel, type VideoLoadState } from '../src/ui/lab/VideosPanel';
+import { VideosPanel } from '../src/ui/lab/VideosPanel';
 import { DEFAULT_DANMAKU_KIT_THEME } from '../src/ui/theme';
 
 function descendants(root: Entity): Entity[] {
@@ -22,8 +23,9 @@ function labelledControlNames(root: Entity): Array<string | undefined> {
     .map((attributes) => attributes.label);
 }
 
-const loadStateLabel = (state: Readonly<VideoLoadState>): string => {
-  if (state.status === 'error') return `Failed: ${state.message}`;
+const loadStateLabel = (
+  state: Readonly<Exclude<VideoLoadState, { status: 'error' }>>,
+): string => {
   if (state.status === 'loading') return `Loading ${state.progress ?? 0}`;
   return state.status === 'ready' ? 'Ready' : 'Idle';
 };
@@ -32,7 +34,7 @@ function createVideosPanel(callbacks: {
   choices: unknown[];
   retries: number[];
   customUrls: string[];
-}): VideosPanel<'local' | 'stream', 'balanced' | 'dense'> {
+}): VideosPanel<'balanced' | 'dense'> {
   return new VideosPanel({
     theme: DEFAULT_DANMAKU_KIT_THEME,
     labels: {
@@ -49,24 +51,32 @@ function createVideosPanel(callbacks: {
       retry: 'Retry load',
       loadState: 'Load state',
       formatLoadState: loadStateLabel,
+      formatLoadError: (error, candidateId) =>
+        `${candidateId ?? 'unknown'}: ${error.code} ${error.message}`,
       formatMetadata: (rows) => rows.map((row) => `${row.label} ${row.value}`).join('\n'),
       formatAttribution: (value) => value,
     },
     state: {
-      source: { kind: 'catalog', videoId: 'local' },
+      source: { kind: 'catalog', id: 'local' },
       profileId: 'balanced',
-      loadState: { status: 'error', message: 'network' },
+      loadState: {
+        status: 'error',
+        candidateId: 'local',
+        error: new VideoSourceError('network-error', 'network'),
+      },
     },
     catalog: [
       {
         id: 'local',
-        label: 'Local clip',
+        title: 'Local clip',
+        source: { kind: 'cdn', url: 'https://media.invalid/local.mp4' },
         metadata: [{ label: 'Duration', value: '15 seconds' }],
         attribution: 'Studio A',
       },
       {
         id: 'stream',
-        label: 'Long stream',
+        title: 'Long stream',
+        source: { kind: 'external', url: 'https://media.invalid/stream.mp4' },
         metadata: [
           { label: 'Resolution', value: '1080p' },
           { label: 'Duration', value: '10 minutes' },
@@ -192,6 +202,11 @@ describe('laboratory panels', () => {
       (entity): entity is ScrollView => entity instanceof ScrollView,
     )!;
     const initialContentHeight = scroll.content.height;
+    expect(
+      nodes
+        .filter((entity): entity is Text => entity instanceof Text)
+        .some((text) => text.getContentProjection()?.text === 'local: network-error network'),
+    ).toBe(true);
 
     groups[0]!.selectByValue('catalog:1');
     expect(scroll.content.height).toBeGreaterThan(initialContentHeight);
@@ -218,7 +233,7 @@ describe('laboratory panels', () => {
     choose.dispatchEvent(new VectoJSEvent('click', choose));
 
     expect(callbacks.choices).toEqual([
-      { source: { kind: 'catalog', videoId: 'stream' }, profileId: 'dense' },
+      { source: { kind: 'catalog', id: 'stream' }, profileId: 'dense' },
       { source: { kind: 'custom', url: 'https://media.invalid/custom.mp4' }, profileId: 'dense' },
     ]);
     expect(callbacks.retries).toEqual([1]);
