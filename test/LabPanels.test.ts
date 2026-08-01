@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { Entity, VectoJSEvent } from '@vectojs/core';
-import { Button, Checkbox, Input, RadioGroup, ScrollView, Slider } from '@vectojs/ui';
+import { Button, Checkbox, Input, RadioGroup, ScrollView, Slider, Text } from '@vectojs/ui';
 
 import { DevToolsInfoPanel } from '../src/ui/lab/DevToolsInfoPanel';
 import { InteractionsPanel } from '../src/ui/lab/InteractionsPanel';
@@ -49,7 +49,7 @@ function createVideosPanel(callbacks: {
       retry: 'Retry load',
       loadState: 'Load state',
       formatLoadState: loadStateLabel,
-      formatMetadata: (rows) => rows.map((row) => `${row.label} ${row.value}`).join(', '),
+      formatMetadata: (rows) => rows.map((row) => `${row.label} ${row.value}`).join('\n'),
       formatAttribution: (value) => value,
     },
     state: {
@@ -67,13 +67,20 @@ function createVideosPanel(callbacks: {
       {
         id: 'stream',
         label: 'Long stream',
-        metadata: [{ label: 'Resolution', value: '1080p' }],
+        metadata: [
+          { label: 'Resolution', value: '1080p' },
+          { label: 'Duration', value: '10 minutes' },
+        ],
         attribution: 'Studio B',
       },
     ],
     profiles: [
       { id: 'balanced', label: 'Balanced', description: 'Balanced tracks' },
-      { id: 'dense', label: 'Dense', description: 'Dense tracks' },
+      {
+        id: 'dense',
+        label: 'Dense',
+        description: 'Dense tracks\nPinned interactions\nEffect overlays',
+      },
     ],
     onChoose: (selection) => callbacks.choices.push(selection),
     onRetry: () => callbacks.retries.push(1),
@@ -181,9 +188,30 @@ describe('laboratory panels', () => {
       (entity): entity is Button =>
         entity instanceof Button && entity.getA11yAttributes().label === 'Retry load',
     )!;
+    const scroll = nodes.find(
+      (entity): entity is ScrollView => entity instanceof ScrollView,
+    )!;
+    const initialContentHeight = scroll.content.height;
 
     groups[0]!.selectByValue('catalog:1');
+    expect(scroll.content.height).toBeGreaterThan(initialContentHeight);
+    expect(
+      nodes
+        .filter((entity): entity is Text => entity instanceof Text)
+        .some((text) => text.getContentProjection()?.text === 'Resolution 1080p\nDuration 10 minutes'),
+    ).toBe(true);
+    const sourceContentHeight = scroll.content.height;
     groups[1]!.selectByValue('profile:1');
+    expect(scroll.content.height).toBeGreaterThan(sourceContentHeight);
+    expect(
+      nodes
+        .filter((entity): entity is Text => entity instanceof Text)
+        .some(
+          (text) =>
+            text.getContentProjection()?.text ===
+            'Dense tracks\nPinned interactions\nEffect overlays',
+        ),
+    ).toBe(true);
     choose.dispatchEvent(new VectoJSEvent('click', choose));
     retry.dispatchEvent(new VectoJSEvent('click', retry));
     input.emit('change', { value: 'https://media.invalid/custom.mp4' });

@@ -237,6 +237,7 @@ export class VideosPanel<VideoId extends string, ProfileId extends string> exten
       this.chooseButton.disabled = this.customUrlInput.value.trim().length === 0;
       this.metadata.setText(this.options.labels.formatMetadata([]));
       this.attribution.setText(this.options.labels.formatAttribution(''));
+      this.relayoutContent();
       return;
     }
     const index = Number(value.slice('catalog:'.length));
@@ -246,6 +247,7 @@ export class VideosPanel<VideoId extends string, ProfileId extends string> exten
       this.chooseButton.disabled = false;
       this.metadata.setText(this.options.labels.formatMetadata(row.metadata));
       this.attribution.setText(this.options.labels.formatAttribution(row.attribution));
+      this.relayoutContent();
     }
   }
 
@@ -255,6 +257,7 @@ export class VideosPanel<VideoId extends string, ProfileId extends string> exten
     if (row) {
       this.pendingProfileId = row.id;
       this.profileDetails.setText(row.description);
+      this.relayoutContent();
     }
   }
 
