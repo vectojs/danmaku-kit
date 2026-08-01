@@ -1,5 +1,11 @@
 # @vectojs/danmaku-kit
 
+## 0.3.0
+
+### Minor Changes
+
+- b977d17: Add optional, injected throughput quick-target presets with radio semantics while retaining the bounded custom target slider.
+
 ## 0.2.0
 
 ### Minor Changes
