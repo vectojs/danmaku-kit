@@ -27,7 +27,13 @@ class LabelledScrollView extends ScrollView {
     return {
       role: 'region',
       label: this.accessibleLabel,
-      pointerEvents: 'none',
+      // NOTE: deliberately NOT pointerEvents:'none'. ScrollView implements
+      // scrolling entirely through node events — on('wheel') plus
+      // on('pointerdown')/on('pointermove') drag-scroll — and those are
+      // dispatched only from this projected element. Suppressing pointer
+      // events here disables the wheel and the drag, i.e. it makes the panel
+      // unscrollable with a mouse while leaving it scrollable by keyboard,
+      // which is exactly the bug this replaced.
     };
   }
 }
@@ -84,6 +90,10 @@ export abstract class LabPanel<State> extends UIComponent implements LabPanelCon
     return {
       role: 'region',
       label: this.accessibleLabel,
+      // This outer region exactly covers its ScrollView child, so it MUST stay
+      // pointer-transparent: a descendant that re-enables pointer events stays
+      // targetable inside a `none` ancestor, but an ancestor left at the
+      // default `auto` would swallow the wheel before the ScrollView saw it.
       pointerEvents: 'none',
     };
   }

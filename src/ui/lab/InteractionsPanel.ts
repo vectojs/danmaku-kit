@@ -65,6 +65,7 @@ export class InteractionsPanel<
 
     this.addHeading(options.labels.presets);
     this.presetGroup = new RadioGroup({
+      label: options.labels.presets,
       options: options.presets.map((row) => ({ value: row.id, label: row.label })),
       value: options.state.presetId,
       direction: 'vertical',

@@ -61,7 +61,12 @@ export class DanmakuLabDrawer<TabId extends string> extends UIComponent {
     this.closeButton.width = Math.min(120, Math.max(72, this.closeButton.textWidth + 24));
 
     this.tabs = new Tabs({
-      tabs: options.panels.map((tab) => ({ id: tab.id, label: tab.label, content: tab.panel })),
+      label: options.labels.title,
+      tabs: options.panels.map((tab) => ({
+        id: tab.id,
+        label: tab.label,
+        content: tab.panel,
+      })),
       value: options.activeTab,
       width: 1,
       height: 1,

@@ -93,6 +93,7 @@ export class ThroughputPanel<
     this.quickTargetGroup =
       quickTargets.length > 0
         ? new RadioGroup({
+            label: options.labels.quickTargets ?? options.labels.target,
             options: quickTargets.map((target) => ({
               value: String(target.value),
               label: target.label,
@@ -145,6 +146,7 @@ export class ThroughputPanel<
 
     this.addHeading(options.labels.distribution);
     this.distributionGroup = new RadioGroup({
+      label: options.labels.distribution,
       options: options.distributions.map((row) => ({ value: row.id, label: row.label })),
       value: options.state.distributionId,
       direction: 'vertical',
