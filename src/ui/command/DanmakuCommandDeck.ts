@@ -20,12 +20,30 @@ export interface DanmakuCommandDeckOptions {
   labOpen?: boolean;
 }
 
+/**
+ * One already-downloaded span of the media timeline, in seconds.
+ *
+ * Mirrors one entry of an `HTMLMediaElement.buffered` `TimeRanges`. A stream
+ * seeked around in produces several disjoint ranges, so this is a list rather
+ * than a single high-water mark.
+ */
+export interface DanmakuBufferedRange {
+  start: number;
+  end: number;
+}
+
 export interface DanmakuPlaybackState {
   currentTime: number;
   duration: number;
   playing: boolean;
   rate: number;
   disabled: boolean;
+  /**
+   * Downloaded spans, painted under the scrubber progress. Omit when the source
+   * has no buffering notion (a stress-mode run, an image background); the
+   * scrubber then shows position only, exactly as before.
+   */
+  buffered?: readonly DanmakuBufferedRange[];
 }
 
 export interface CommandDeckBounds {
@@ -57,14 +75,97 @@ const RATE_OPTIONS = [
 ] as const;
 const RATE_LABELS = RATE_OPTIONS.map((option) => option.label);
 
+/** Track thickness and handle radius the library's `Slider` paints with. */
+const SLIDER_TRACK_THICKNESS_PX = 6;
+const SLIDER_HANDLE_RADIUS_PX = 8;
+
+/**
+ * Seek slider that paints downloaded spans under the progress fill.
+ *
+ * `render` is a full reimplementation rather than a `super.render()` call
+ * because paint order is the whole point: buffered has to land above the empty
+ * track and below the progress fill, and there is no seam in the library's
+ * `render` to inject into. The library's own colors are private, so the ones
+ * passed at construction are kept here too. Consequence to accept: a change to
+ * the library slider's appearance will not reach this subclass on its own.
+ */
 class PlaybackSlider extends Slider {
   private playbackDisabled = false;
+  private bufferedRanges: readonly DanmakuBufferedRange[] = [];
+  /** Painted geometry of {@link bufferedRanges}, used to skip no-op repaints. */
+  private bufferedSignature = '';
+  private readonly trackFill: string;
+  private readonly progressFill: string;
+  private readonly handleFill: string;
+  private readonly bufferedFill: string;
+
+  public constructor(props: {
+    trackColor: string;
+    progressColor: string;
+    handleColor: string;
+    bufferedColor: string;
+    [key: string]: unknown;
+  }) {
+    super(props);
+    this.trackFill = props.trackColor;
+    this.progressFill = props.progressColor;
+    this.handleFill = props.handleColor;
+    this.bufferedFill = props.bufferedColor;
+  }
 
   public setDisabled(disabled: boolean): void {
     if (this.playbackDisabled === disabled) return;
     this.playbackDisabled = disabled;
     this.interactive = !disabled;
     this.scene?.markDirty({ entity: this.id, reason: 'playback-disabled' });
+  }
+
+  /**
+   * Replace the downloaded spans.
+   *
+   * Called on a poll while a stream downloads, so it must be cheap and must not
+   * mark the scene dirty unless the painted result actually moves — otherwise it
+   * defeats render-on-demand for the whole app. Ranges are clamped, sorted and
+   * merged: overlapping spans of a translucent fill would composite into a
+   * visibly darker band that means nothing.
+   */
+  public setBuffered(ranges: readonly DanmakuBufferedRange[]): void {
+    const span = this.max - this.min;
+    const merged: DanmakuBufferedRange[] = [];
+    for (const range of ranges) {
+      if (!Number.isFinite(range.start) || !Number.isFinite(range.end)) continue;
+      const start = Math.max(this.min, Math.min(this.max, range.start));
+      const end = Math.max(this.min, Math.min(this.max, range.end));
+      if (end <= start) continue;
+      merged.push({ start, end });
+    }
+    merged.sort((a, b) => a.start - b.start);
+    const normalized: DanmakuBufferedRange[] = [];
+    for (const range of merged) {
+      const previous = normalized[normalized.length - 1];
+      if (previous && range.start <= previous.end) {
+        previous.end = Math.max(previous.end, range.end);
+        continue;
+      }
+      normalized.push(range);
+    }
+
+    // Compare what would be painted, not the raw seconds: a stream advances its
+    // buffer continuously, and only a change of at least a pixel is visible.
+    const signature =
+      span > 0
+        ? normalized
+            .map((range) => {
+              const x0 = Math.round(((range.start - this.min) / span) * this.width);
+              const x1 = Math.round(((range.end - this.min) / span) * this.width);
+              return `${x0}-${x1}`;
+            })
+            .join(',')
+        : '';
+    this.bufferedRanges = normalized;
+    if (signature === this.bufferedSignature) return;
+    this.bufferedSignature = signature;
+    this.scene?.markDirty({ entity: this.id, reason: 'playback-buffered' });
   }
 
   public override getA11yAttributes(): A11yAttributes {
@@ -89,24 +190,43 @@ class PlaybackSlider extends Slider {
   }
 
   public override render(renderer: IRenderer): void {
-    if (!(this.scene?.forcedColors ?? false)) {
-      super.render(renderer);
-      return;
-    }
-
+    const forced = this.scene?.forcedColors ?? false;
     const span = this.max - this.min;
     const progress = span > 0 ? (this.value - this.min) / span : 0;
     const centerY = this.height / 2;
+    const top = centerY - SLIDER_TRACK_THICKNESS_PX / 2;
+    const radius = SLIDER_TRACK_THICKNESS_PX / 2;
+
     renderer.beginPath();
-    renderer.roundRect(0, centerY - 3, this.width, 6, 3);
-    renderer.fill('Canvas');
-    renderer.stroke('CanvasText', 1);
+    renderer.roundRect(0, top, this.width, SLIDER_TRACK_THICKNESS_PX, radius);
+    renderer.fill(forced ? 'Canvas' : this.trackFill);
+    if (forced) renderer.stroke('CanvasText', 1);
+
+    for (const range of span > 0 ? this.bufferedRanges : []) {
+      const x0 = ((range.start - this.min) / span) * this.width;
+      const x1 = ((range.end - this.min) / span) * this.width;
+      renderer.beginPath();
+      renderer.roundRect(x0, top, x1 - x0, SLIDER_TRACK_THICKNESS_PX, radius);
+      renderer.fill(forced ? 'GrayText' : this.bufferedFill);
+    }
+
     renderer.beginPath();
-    renderer.roundRect(0, centerY - 3, this.width * progress, 6, 3);
-    renderer.fill('Highlight');
+    renderer.roundRect(0, top, this.width * progress, SLIDER_TRACK_THICKNESS_PX, radius);
+    renderer.fill(forced ? 'Highlight' : this.progressFill);
+
     renderer.beginPath();
-    renderer.arc(this.width * progress, centerY, 8, 0, Math.PI * 2);
-    renderer.fill(this.playbackDisabled ? 'GrayText' : 'ButtonText');
+    renderer.arc(this.width * progress, centerY, SLIDER_HANDLE_RADIUS_PX, 0, Math.PI * 2);
+    if (forced) {
+      renderer.fill(this.playbackDisabled ? 'GrayText' : 'ButtonText');
+    } else {
+      renderer.fill(this.handleFill);
+    }
+
+    if (this.focused) {
+      renderer.beginPath();
+      renderer.arc(this.width * progress, centerY, SLIDER_HANDLE_RADIUS_PX + 3, 0, Math.PI * 2);
+      renderer.stroke(forced ? 'Highlight' : this.focusColor, 2);
+    }
   }
 }
 
@@ -226,6 +346,7 @@ export class DanmakuCommandDeck extends Entity {
       trackColor: this.theme.border,
       progressColor: this.theme.signal,
       handleColor: this.theme.text,
+      bufferedColor: this.theme.bufferedTrack,
       focusColor: this.theme.focusRing,
       onChange: (time: number) => this.callbacks.onSeek(time),
     });
@@ -306,6 +427,8 @@ export class DanmakuCommandDeck extends Entity {
     this.timeline.min = 0;
     this.timeline.max = duration > 0 ? duration : 1;
     this.timeline.value = currentTime;
+    // After min/max, which setBuffered needs to map seconds onto pixels.
+    this.timeline.setBuffered(state.buffered ?? []);
     this.setButtonLabel(
       this.playButton,
       state.playing ? this.labels.command.pause : this.labels.command.play,

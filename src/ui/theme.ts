@@ -26,6 +26,14 @@ export interface DanmakuKitTheme {
    * {@link menuSelected}, since both apply at once to a highlighted selection.
    */
   menuHighlight: string;
+  /**
+   * Fill for the already-downloaded span of a media scrubber.
+   *
+   * Must read as a third step between the empty track and {@link signal}
+   * progress: louder than the track so buffered-versus-empty is legible at a
+   * glance, quieter than progress so it never competes with the playhead.
+   */
+  bufferedTrack: string;
   radius: number;
   fontUi: string;
   fontLabel: string;
@@ -49,6 +57,7 @@ export const DEFAULT_DANMAKU_KIT_THEME: Readonly<DanmakuKitTheme> = Object.freez
   menuSurface: 'rgba(15, 23, 42, 0.98)',
   menuSelected: 'rgba(96, 165, 250, 0.22)',
   menuHighlight: 'rgba(96, 165, 250, 0.4)',
+  bufferedTrack: 'rgba(148, 163, 184, 0.55)',
   radius: 14,
   fontUi: "500 13px 'Inter', system-ui, sans-serif",
   fontLabel: "600 11px 'Inter', system-ui, sans-serif",
