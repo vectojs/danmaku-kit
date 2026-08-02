@@ -12,7 +12,7 @@
         "@types/bun": "^1.3.14",
         "@vectojs/core": "^1.27.0",
         "@vectojs/danmaku-core": "0.2.0",
-        "@vectojs/ui": "^2.6.0",
+        "@vectojs/ui": "^2.7.0",
         "carryctx": "0.4.4",
         "knip": "^6.31.0",
         "lefthook": "^2.1.10",
@@ -491,7 +491,7 @@
 
     "@vectojs/text": ["@vectojs/text@0.3.0", "", { "dependencies": { "bidi-js": "^1.0.3" } }, "sha512-Ra0C/RTuWYIjr+rp58gRWHuzpwYfdVyjhGeEFGEse17ZoE4kqfU6HpOZgNm+ka6nn5Z/UBJmkSGiNhszO+vS/g=="],
 
-    "@vectojs/ui": ["@vectojs/ui@2.6.0", "", { "peerDependencies": { "@vectojs/core": ">=1.8.0 <2.0.0" } }, "sha512-aq9O5tue9htX5A5SyrfIcR0NWTKfJXUzV4r+cDELJ4zImo/cvlpye59rzwllSZAJe2GvilH+jcxFyHKFvh7i5g=="],
+    "@vectojs/ui": ["@vectojs/ui@2.7.0", "", { "peerDependencies": { "@vectojs/core": ">=1.8.0 <2.0.0" } }, "sha512-U2BuLEhU7GEokISgKSSseakcDS76GTSg9rLEwS2Azqcb2YObepPl8pfh90v0FXot9hLGp0OOoBo8ZMcZFv+YDg=="],
 
     "acorn": ["acorn@8.18.0", "", { "bin": { "acorn": "bin/acorn" } }, "sha512-lGq+9yr1/GuAWaVYIHRjvvySG5/4VfKIvC8EWxStPdcDh/Ka7FG3twP6v4d5BkravUilhIAsG4Qj83t02LWUPQ=="],
 

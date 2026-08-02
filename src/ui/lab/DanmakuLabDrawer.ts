@@ -52,6 +52,7 @@ export class DanmakuLabDrawer<TabId extends string> extends UIComponent {
       color: options.theme.text,
       font: options.theme.fontUi,
       radius: options.theme.radius,
+      focusColor: options.theme.focusRing,
       onClick: () => {
         this.setOpen(false);
         options.onOpenChange(false);

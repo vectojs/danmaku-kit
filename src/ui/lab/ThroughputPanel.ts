@@ -123,6 +123,7 @@ export class ThroughputPanel<
       trackColor: options.theme.border,
       progressColor: options.theme.accent,
       handleColor: options.theme.text,
+      focusColor: options.theme.focusRing,
       onChange: options.onTargetChange,
     });
     this.content.add(this.targetSlider);
@@ -137,6 +138,7 @@ export class ThroughputPanel<
       trackColor: options.theme.border,
       progressColor: options.theme.signal,
       handleColor: options.theme.text,
+      focusColor: options.theme.focusRing,
       onChange: options.onRateChange,
     });
     this.content.add(this.rateSlider);

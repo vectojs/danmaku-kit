@@ -124,7 +124,10 @@ class PlaybackRateDropdown extends Dropdown {
 
   public setSelectedValue(value: string): void {
     if (this.getValue() === value) return;
-    const mutable = this as unknown as { selectedValue: string; button: Button };
+    const mutable = this as unknown as {
+      selectedValue: string;
+      button: Button;
+    };
     mutable.selectedValue = value;
     mutable.button.label = value;
     mutable.button.textWidth = measureText(value, mutable.button.font);
@@ -198,6 +201,7 @@ export class DanmakuCommandDeck extends Entity {
       color: this.theme.text,
       font: this.theme.fontLabel,
       radius: this.theme.radius,
+      focusColor: this.theme.focusRing,
       onClick: () => this.dispatchMessage(),
     });
     this.playButton = new Button(this.labels.command.play, {
@@ -208,6 +212,7 @@ export class DanmakuCommandDeck extends Entity {
       color: this.theme.text,
       font: this.theme.fontLabel,
       radius: this.theme.radius,
+      focusColor: this.theme.focusRing,
       onClick: () => this.callbacks.onPlayPause(),
     });
     this.timeline = new PlaybackSlider({
@@ -221,6 +226,7 @@ export class DanmakuCommandDeck extends Entity {
       trackColor: this.theme.border,
       progressColor: this.theme.signal,
       handleColor: this.theme.text,
+      focusColor: this.theme.focusRing,
       onChange: (time: number) => this.callbacks.onSeek(time),
     });
     this.elapsed = new Text('0:00 / 0:00', {
@@ -238,6 +244,13 @@ export class DanmakuCommandDeck extends Entity {
       color: this.theme.text,
       font: this.theme.fontLabel,
       radius: this.theme.radius,
+      // The closed trigger was always themed; without these the menu it opens
+      // falls back to the library's navy/cyan defaults.
+      menuBg: this.theme.menuSurface,
+      menuColor: this.theme.text,
+      menuSelectedBg: this.theme.menuSelected,
+      menuHighlightBg: this.theme.menuHighlight,
+      focusColor: this.theme.focusRing,
       onChange: (label: string) => {
         const option = RATE_OPTIONS.find((candidate) => candidate.label === label);
         if (option) this.callbacks.onRateChange(option.value);
@@ -253,6 +266,7 @@ export class DanmakuCommandDeck extends Entity {
         color: this.theme.text,
         font: this.theme.fontLabel,
         radius: this.theme.radius,
+        focusColor: this.theme.focusRing,
         onClick: () => {
           this.labOpen = !this.labOpen;
           this.setButtonLabel(
@@ -447,6 +461,11 @@ export class DanmakuCommandDeck extends Entity {
   }
 
   private boundsOf(entity: Entity): CommandDeckBounds {
-    return { x: entity.x, y: entity.y, width: entity.width, height: entity.height };
+    return {
+      x: entity.x,
+      y: entity.y,
+      width: entity.width,
+      height: entity.height,
+    };
   }
 }
