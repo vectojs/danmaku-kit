@@ -91,6 +91,7 @@ export class VideosPanel<ProfileId extends string> extends LabPanel<VideosPanelS
 
     this.addHeading(options.labels.videos);
     this.sourceGroup = new RadioGroup({
+      label: options.labels.videos,
       options: [
         ...options.catalog.map((row, index) => ({
           value: this.catalogValue(index),
@@ -132,6 +133,7 @@ export class VideosPanel<ProfileId extends string> extends LabPanel<VideosPanelS
 
     this.addHeading(options.labels.profiles);
     this.profileGroup = new RadioGroup({
+      label: options.labels.profiles,
       options: options.profiles.map((row, index) => ({
         value: this.profileValue(index),
         label: row.label,
