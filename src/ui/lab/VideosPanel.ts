@@ -164,6 +164,7 @@ export class VideosPanel<ProfileId extends string> extends LabPanel<VideosPanelS
       color: options.theme.text,
       font: options.theme.fontUi,
       radius: options.theme.radius,
+      focusColor: options.theme.focusRing,
       onClick: () =>
         options.onChoose({ source: this.pendingSource, profileId: this.pendingProfileId }),
     });
@@ -175,6 +176,7 @@ export class VideosPanel<ProfileId extends string> extends LabPanel<VideosPanelS
       color: options.theme.text,
       font: options.theme.fontUi,
       radius: options.theme.radius,
+      focusColor: options.theme.focusRing,
       onClick: options.onRetry,
     });
     this.content.add(this.chooseButton);

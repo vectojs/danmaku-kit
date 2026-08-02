@@ -51,6 +51,7 @@ export class DevToolsInfoPanel extends LabPanel<DevToolsInfoPanelState> {
       color: options.theme.text,
       font: options.theme.fontUi,
       radius: options.theme.radius,
+      focusColor: options.theme.focusRing,
       onClick: options.onReload,
     });
     this.content.add(this.heading);
