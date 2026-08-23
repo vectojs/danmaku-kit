@@ -1,6 +1,6 @@
 import { describe, expect, it, mock } from 'bun:test';
 import type { IRenderer } from '@vectojs/core';
-import { Button, Dropdown, Input, Slider, Text } from '@vectojs/ui';
+import { Button, Dropdown, Input, measureText, Slider, Text } from '@vectojs/ui';
 import {
   DanmakuCommandDeck,
   type CommandDeckLayoutSnapshot,
@@ -143,8 +143,17 @@ describe('DanmakuCommandDeck', () => {
     expect(elapsed.a11yHidden).toBe(true);
     expect(deck.children).toEqual(before);
 
-    deck.setWidth(360);
-    expect(controls(deck).elapsed.a11yHidden).toBe(false);
+    // Elapsed appears only once the measured label still leaves the scrubber
+    // a usable minimum; 380 stays under that bar, 480 clears it with room for
+    // both real-canvas metrics and the DOM-free width estimate bun tests use.
+    deck.setWidth(380);
+    expect(controls(deck).elapsed.a11yHidden).toBe(true);
+
+    deck.setWidth(480);
+    expectBoundedAndNonOverlapping(deck);
+    const wideControls = controls(deck);
+    const paintedWide = measureText(wideControls.elapsed.text, DEFAULT_DANMAKU_KIT_THEME.fontMono);
+    expect(wideControls.rate.x).toBeGreaterThanOrEqual(wideControls.elapsed.x + paintedWide);
   });
 
   it('updates playback state in place and disables every playback action', () => {
@@ -186,6 +195,38 @@ describe('DanmakuCommandDeck', () => {
     expect(calls.playPause).toBe(1);
     expect(calls.seeks).toEqual([42]);
     expect(calls.rates).toEqual([2]);
+  });
+
+  it('reserves at least the painted elapsed width ahead of the rate dropdown', () => {
+    const { deck } = createDeck(900);
+    const { rate, elapsed } = controls(deck);
+
+    const painted = measureText(elapsed.text, DEFAULT_DANMAKU_KIT_THEME.fontMono);
+    expect(elapsed.width).toBeGreaterThanOrEqual(Math.ceil(painted));
+    expect(rate.x).toBeGreaterThanOrEqual(elapsed.x + painted);
+  });
+
+  it('re-measures the elapsed label when durations grow and keeps every rate option clear', () => {
+    const { deck } = createDeck(900);
+    const { rate, elapsed } = controls(deck);
+    const rateLabels: Record<number, string> = { 0.5: '0.5×', 1: '1×', 1.5: '1.5×', 2: '2×' };
+
+    // '12:34 / 84:00' paints far wider than the legacy fixed reserves; each
+    // rate option must sit clear of the painted glyphs in every state.
+    for (const [rateOption, label] of Object.entries(rateLabels)) {
+      deck.setPlaybackState({
+        currentTime: 754,
+        duration: 5040,
+        playing: true,
+        rate: Number(rateOption),
+        disabled: false,
+      });
+      const painted = measureText(elapsed.text, DEFAULT_DANMAKU_KIT_THEME.fontMono);
+      expect(elapsed.text).toBe('12:34 / 84:00');
+      expect(rate.getValue()).toBe(label);
+      expect(elapsed.width).toBeGreaterThanOrEqual(Math.ceil(painted));
+      expect(rate.x).toBeGreaterThanOrEqual(elapsed.x + painted);
+    }
   });
 
   it('repaints elapsed text with a system color when forced colors changes', () => {
