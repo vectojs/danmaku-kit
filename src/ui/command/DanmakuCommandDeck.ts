@@ -80,6 +80,15 @@ const SLIDER_TRACK_THICKNESS_PX = 6;
 const SLIDER_HANDLE_RADIUS_PX = 8;
 
 /**
+ * Breathing room added on top of the measured elapsed-label width. The Text
+ * entity paints its real glyph width, not the reserved box, so the box has to
+ * clear the digits or they reach into the rate dropdown beside them.
+ */
+const ELAPSED_MARGIN_PX = 4;
+/** Narrowest scrubber a compact row keeps before the elapsed label hides. */
+const MIN_COMPACT_SCRUBBER_WIDTH = 48;
+
+/**
  * Seek slider that paints downloaded spans under the progress fill.
  *
  * `render` is a full reimplementation rather than a `super.render()` call
@@ -433,7 +442,13 @@ export class DanmakuCommandDeck extends Entity {
       this.playButton,
       state.playing ? this.labels.command.pause : this.labels.command.play,
     );
-    this.elapsed.setText(`${this.formatTime(currentTime)} / ${this.formatTime(duration)}`);
+    const elapsedLabel = `${this.formatTime(currentTime)} / ${this.formatTime(duration)}`;
+    if (this.elapsed.text !== elapsedLabel) {
+      this.elapsed.setText(elapsedLabel);
+      // The reservation tracks the label, so a wider duration format shifts
+      // every control right of it.
+      this.layoutControls();
+    }
     this.rate.setSelectedValue(rateOption.label);
     this.playButton.disabled = state.disabled;
     this.timeline.setDisabled(state.disabled);
@@ -504,6 +519,7 @@ export class DanmakuCommandDeck extends Entity {
 
   private layoutDesktop(): void {
     const y = PADDING;
+    const elapsedWidth = this.elapsedReserve();
     this.sendButton.width = 64;
     this.playButton.width = 72;
     this.timeline.width = 140;
@@ -517,7 +533,7 @@ export class DanmakuCommandDeck extends Entity {
         this.sendButton.width -
         this.playButton.width -
         this.timeline.width -
-        64 -
+        elapsedWidth -
         this.rate.width -
         this.labButton.width -
         GAP * 6,
@@ -527,7 +543,7 @@ export class DanmakuCommandDeck extends Entity {
     this.timeline.setPosition(this.playButton.x + this.playButton.width + GAP, y);
     this.elapsed.a11yHidden = false;
     this.elapsed.opacity = 1;
-    this.elapsed.width = 64;
+    this.elapsed.width = elapsedWidth;
     this.elapsed.setPosition(this.timeline.x + this.timeline.width + GAP, y + 10);
     this.rate.setPosition(this.elapsed.x + this.elapsed.width + GAP, y);
     this.labButton.setPosition(this.rate.x + this.rate.width + GAP, y);
@@ -537,12 +553,21 @@ export class DanmakuCommandDeck extends Entity {
     const playbackY = PADDING;
     const commentY = 57;
     const innerWidth = Math.max(1, this.width - PADDING * 2);
-    const showElapsed = this.width >= 360;
-    const elapsedWidth = showElapsed ? 48 : 0;
-    const playbackGaps = showElapsed ? 4 : 3;
     const playWidth = 64;
     const rateWidth = 64;
     const labWidth = 104;
+    // The label paints its measured glyph width, so reserve that plus a
+    // margin instead of the old constant 48 that let digits reach into the
+    // rate dropdown.
+    const elapsedNeeded = this.elapsedReserve();
+    // Show the label only while the scrubber still keeps a usable minimum
+    // after every fixed control; the old fixed 360px threshold assumed a
+    // 48px label.
+    const showElapsed =
+      innerWidth >=
+      playWidth + rateWidth + labWidth + elapsedNeeded + MIN_COMPACT_SCRUBBER_WIDTH + GAP * 4;
+    const elapsedWidth = showElapsed ? elapsedNeeded : 0;
+    const playbackGaps = showElapsed ? 4 : 3;
     const timelineWidth = Math.max(
       1,
       innerWidth - playWidth - rateWidth - labWidth - elapsedWidth - playbackGaps * GAP,
@@ -574,6 +599,11 @@ export class DanmakuCommandDeck extends Entity {
     if (button.label === label) return;
     button.label = label;
     button.textWidth = measureText(label, button.font);
+  }
+
+  /** Reserved width for the elapsed label: its measured glyphs plus margin. */
+  private elapsedReserve(): number {
+    return Math.ceil(measureText(this.elapsed.text, this.theme.fontMono)) + ELAPSED_MARGIN_PX;
   }
 
   private formatTime(time: number): string {
