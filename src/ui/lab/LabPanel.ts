@@ -1,4 +1,4 @@
-import { type A11yAttributes, type IRenderer } from '@vectojs/core';
+import { Entity, type A11yAttributes, type IRenderer } from '@vectojs/core';
 import { ScrollView, Stack, UIComponent } from '@vectojs/ui';
 
 export interface LabAvailableBounds {
@@ -85,6 +85,20 @@ export abstract class LabPanel<State> extends UIComponent implements LabPanelCon
   }
 
   protected onForcedColorsChange(_forced: boolean): void {}
+
+  override destroy(): void {
+    // Entity.destroy() tears a subtree down leaf-first and expects every node
+    // to detach itself through parent.remove(this). ScrollView overrides
+    // remove() to route children through its content wrapper, so when the
+    // recursion hands teardown to that wrapper itself, ScrollView.remove()
+    // looks for it *inside* the wrapper, finds nothing, and never splices it
+    // out — the wrapper stays in children[] flagged _destroyed and the
+    // parent's leaf-first loop re-calls it forever (a synchronous hang: bun
+    // test never exits). Detaching the wrapper with base Entity semantics
+    // before super.destroy() lets the walk finish cleanly.
+    Entity.prototype.remove.call(this.scrollView, this.scrollView.content);
+    super.destroy();
+  }
 
   override getA11yAttributes(): A11yAttributes {
     return {
