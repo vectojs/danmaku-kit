@@ -34,6 +34,30 @@ export interface DanmakuKitTheme {
    * glance, quieter than progress so it never competes with the playhead.
    */
   bufferedTrack: string;
+  /**
+   * Row height of every command-deck control, in logical pixels. Container
+   * geometry derives from it rather than from independent constants: the
+   * desktop bar height, the compact card's two rows, and the elapsed label's
+   * vertical centering all scale with this value.
+   *
+   * Optional; the historical 40px row applies when omitted, so existing themes
+   * render byte-identically. Values below the 24px readability floor are
+   * clamped up. The status bar keeps its own two-line geometry on purpose: its
+   * heights never derived from the deck's row constant, so one token silently
+   * resizing another surface would be surprising coupling, not convenience.
+   */
+  readonly controlHeight?: number;
+  /**
+   * Paint status pills as a neutral outline with a small colored state dot
+   * inside, instead of stroking the pill outline (and the bar underline) with
+   * the state color. The color still changes per state - it just concentrates
+   * into a glanceable dot, which lets a theme keep success/warning saturated
+   * without colored chrome everywhere.
+   *
+   * Optional; the historical color-stroked pill applies when omitted. Forced
+   * colors always paint with system colors regardless of this flag.
+   */
+  readonly statusDot?: boolean;
   radius: number;
   fontUi: string;
   fontLabel: string;

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { Entity, VectoJSEvent } from '@vectojs/core';
+import { Entity, type IRenderer, VectoJSEvent } from '@vectojs/core';
 import { Button, Tabs } from '@vectojs/ui';
 
 import { DanmakuLabDrawer } from '../src/ui/lab/DanmakuLabDrawer';
@@ -130,5 +130,47 @@ describe('DanmakuLabDrawer', () => {
     drawer.setOpen(true);
     expect(drawer.interactive).toBe(true);
     expect(descendants(drawer)).toContain(firstPanel);
+  });
+});
+describe('drawer surface token reachability (#16c)', () => {
+  test('paints the drawer plate straight from theme.surface', () => {
+    const sentinel = 'rgba(9, 11, 17, 0.62)';
+    const drawer = new DanmakuLabDrawer({
+      theme: { ...DEFAULT_DANMAKU_KIT_THEME, surface: sentinel },
+      labels: DEFAULT_DANMAKU_KIT_LABELS.lab,
+      panels: [
+        {
+          id: 'demo',
+          label: 'Demo',
+          panel: new FakePanel('Reachability panel'),
+        },
+      ],
+      open: true,
+      activeTab: 'demo',
+      onOpenChange: () => undefined,
+      onActiveTabChange: () => undefined,
+    });
+    drawer.setAvailableBounds({ width: 720, height: 320 });
+
+    const calls: Array<{ op: string; args: unknown[] }> = [];
+    const renderer = new Proxy(
+      {},
+      {
+        get:
+          (_target, op) =>
+          (...args: unknown[]) => {
+            calls.push({ op: String(op), args });
+          },
+      },
+    ) as unknown as IRenderer;
+    drawer.render(renderer);
+
+    const fills = calls.filter((call) => call.op === 'fill');
+    expect(fills.length).toBeGreaterThan(0);
+    expect(fills[0]!.args[0]).toBe(sentinel);
+    // Regression guard (#15/#16 teardown): destroy() must walk the whole
+    // subtree — wrappers, panels, ScrollViews — and return without throwing
+    // or hanging, so bun test can exit.
+    expect(() => drawer.destroy()).not.toThrow();
   });
 });

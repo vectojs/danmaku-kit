@@ -11,6 +11,49 @@ export interface CommandDeckCallbacks {
   onToggleLab: () => void;
 }
 
+/**
+ * Identifiers of the seven controls the deck lays out, in their historical
+ * left-to-right desktop order. `elapsed` is the non-interactive time label;
+ * it rides with whatever cluster names it.
+ */
+export const COMMAND_DECK_CONTROL_IDS = [
+  'input',
+  'send',
+  'play',
+  'timeline',
+  'elapsed',
+  'rate',
+  'lab',
+] as const;
+
+export type CommandDeckGroupId = (typeof COMMAND_DECK_CONTROL_IDS)[number];
+
+function validateGroups(groups: readonly CommandDeckGroupId[][]): void {
+  if (groups.length === 0) {
+    throw new Error('DanmakuCommandDeck groups must contain at least one cluster');
+  }
+  const seen = new Set<CommandDeckGroupId>();
+  for (const cluster of groups) {
+    if (cluster.length === 0) {
+      throw new Error('DanmakuCommandDeck group clusters must name at least one control');
+    }
+    for (const id of cluster) {
+      if (!(COMMAND_DECK_CONTROL_IDS as readonly string[]).includes(id)) {
+        throw new Error(`DanmakuCommandDeck groups name unknown control "${id}"`);
+      }
+      if (seen.has(id)) {
+        throw new Error(`DanmakuCommandDeck control "${id}" appears in more than one cluster`);
+      }
+      seen.add(id);
+    }
+  }
+  for (const id of COMMAND_DECK_CONTROL_IDS) {
+    if (!seen.has(id)) {
+      throw new Error(`DanmakuCommandDeck groups omit required control "${id}"`);
+    }
+  }
+}
+
 export interface DanmakuCommandDeckOptions {
   width: number;
   labels: DanmakuKitLabels;
@@ -18,6 +61,30 @@ export interface DanmakuCommandDeckOptions {
   callbacks: CommandDeckCallbacks;
   compact?: boolean;
   labOpen?: boolean;
+  /**
+   * Semantic clusters laid out left-to-right on the desktop row, for example
+   * `[["input", "send"], ["play", "timeline", "elapsed"], ["rate", "lab"]]`
+   * for compose / transport / utility grouping. Every control id must appear
+   * exactly once across the clusters; anything else throws at construction.
+   *
+   * Gaps inside a cluster keep the ordinary {@link GAP}; boundaries between
+   * clusters widen to `groupGap`, which is how an app expresses rhythm -
+   * compose | transport | utility reading as three plates instead of one
+   * loose spread.
+   *
+   * The compact layout keeps its proven two-row shape regardless of grouping:
+   * those rows are width-starved by design, so clusters collapse into plain
+   * rows rather than risk unusable control widths. This is the deliberate
+   * degradation, not an omission.
+   */
+  groups?: readonly CommandDeckGroupId[][];
+  /**
+   * Gap painted BETWEEN declared clusters on the desktop row. Clamped to at
+   * least the intra-cluster gap so a cluster never reads tighter than its own
+   * contents. Ignored without `groups`; leaving both unset renders exactly
+   * the historical uniform-gap row, byte for byte.
+   */
+  groupGap?: number;
 }
 
 /**
@@ -62,9 +129,23 @@ export interface CommandDeckLayoutSnapshot {
   lab: CommandDeckBounds;
 }
 
-const DESKTOP_HEIGHT = 56;
-const COMPACT_HEIGHT = 106;
-const ROW_HEIGHT = 40;
+/** Historical default of {@link DanmakuKitTheme.controlHeight} and offset scale reference. */
+const DEFAULT_ROW_HEIGHT = 40;
+/** Lowest usable control height; below it the slider track and handle stop reading. */
+const MIN_CONTROL_HEIGHT = 24;
+/**
+ * Vertical offset of the elapsed label inside its row, measured at the
+ * default 40px row and scaled proportionally so the label stays optically
+ * centered at other {@link DanmakuKitTheme.controlHeight} values.
+ */
+const ELAPSED_ROW_OFFSET_PX = 10;
+/**
+ * Breathing room above/between/below the compact card's two stacked rows.
+ * Derived constants reproduce the historical geometry exactly:
+ * commentY = PADDING + row + gap = 57 and COMPACT = commentY + row + gap = 106
+ * at the default 40px row.
+ */
+const COMPACT_ROW_GAP_PX = 9;
 const PADDING = 8;
 const GAP = 8;
 const RATE_OPTIONS = [
@@ -289,6 +370,8 @@ export class DanmakuCommandDeck extends Entity {
   private readonly elapsed: Text;
   private readonly rate: PlaybackRateDropdown;
   private readonly labButton: Button;
+  private readonly groups: readonly (readonly CommandDeckGroupId[])[] | null;
+  private readonly groupGap: number;
   private compact: boolean;
   private labOpen: boolean;
 
@@ -299,13 +382,23 @@ export class DanmakuCommandDeck extends Entity {
     this.callbacks = options.callbacks;
     this.compact = options.compact ?? false;
     this.labOpen = options.labOpen ?? false;
+    if (options.groups !== undefined) validateGroups(options.groups);
+    // Structural errors throw; magnitudes clamp. A missing or non-finite
+    // number falls back to the historical default instead of poisoning the
+    // derived container math with NaN.
+    this.groupGap =
+      options.groupGap !== undefined && Number.isFinite(options.groupGap)
+        ? Math.max(GAP, options.groupGap)
+        : GAP;
+    this.groups = options.groups ?? null;
+    const rowHeight = this.rowHeight();
     this.width = Math.max(0, options.width);
-    this.height = this.compact ? COMPACT_HEIGHT : DESKTOP_HEIGHT;
+    this.height = this.compact ? this.compactHeight() : this.desktopHeight();
     this.clipChildren = true;
 
     this.input = new Input({
       width: 160,
-      height: ROW_HEIGHT,
+      height: rowHeight,
       placeholder: this.labels.command.inputPlaceholder,
       font: this.theme.fontUi,
       color: this.theme.text,
@@ -324,7 +417,7 @@ export class DanmakuCommandDeck extends Entity {
 
     this.sendButton = new Button(this.labels.command.send, {
       width: 64,
-      height: ROW_HEIGHT,
+      height: rowHeight,
       bg: this.theme.accent,
       hoverBg: this.theme.accentHover,
       color: this.theme.text,
@@ -335,7 +428,7 @@ export class DanmakuCommandDeck extends Entity {
     });
     this.playButton = new Button(this.labels.command.play, {
       width: 72,
-      height: ROW_HEIGHT,
+      height: rowHeight,
       bg: this.theme.surfaceRaised,
       hoverBg: this.theme.border,
       color: this.theme.text,
@@ -350,7 +443,7 @@ export class DanmakuCommandDeck extends Entity {
       value: 0,
       step: 0.1,
       width: 140,
-      height: ROW_HEIGHT,
+      height: rowHeight,
       label: this.labels.command.videoPosition,
       trackColor: this.theme.border,
       progressColor: this.theme.signal,
@@ -364,11 +457,11 @@ export class DanmakuCommandDeck extends Entity {
       color: this.theme.textMuted,
       selectable: false,
     });
-    this.elapsed.height = ROW_HEIGHT;
+    this.elapsed.height = rowHeight;
     this.rate = new PlaybackRateDropdown(RATE_LABELS, {
       value: RATE_OPTIONS[1].label,
       width: 72,
-      height: ROW_HEIGHT,
+      height: rowHeight,
       label: this.labels.command.playbackRate,
       bg: this.theme.surfaceRaised,
       color: this.theme.text,
@@ -390,7 +483,7 @@ export class DanmakuCommandDeck extends Entity {
       this.labOpen ? this.labels.command.closeLab : this.labels.command.openLab,
       {
         width: 112,
-        height: ROW_HEIGHT,
+        height: rowHeight,
         bg: this.theme.surfaceRaised,
         hoverBg: this.theme.border,
         color: this.theme.text,
@@ -460,7 +553,7 @@ export class DanmakuCommandDeck extends Entity {
   public setCompact(compact: boolean): this {
     if (this.compact === compact) return this;
     this.compact = compact;
-    this.height = compact ? COMPACT_HEIGHT : DESKTOP_HEIGHT;
+    this.height = compact ? this.compactHeight() : this.desktopHeight();
     this.layoutControls();
     this.scene?.markDirty({ entity: this.id, reason: 'command-layout' });
     return this;
@@ -517,41 +610,77 @@ export class DanmakuCommandDeck extends Entity {
     this.layoutDesktop();
   }
 
+  /**
+   * One sequential walk over the declared order. Without `groups` the order is
+   * the historical flat sequence with GAP at every boundary, so the arithmetic
+   * below reproduces the old hand-written positions exactly; with `groups`
+   * only the boundary gaps between clusters widen.
+   */
   private layoutDesktop(): void {
     const y = PADDING;
-    const elapsedWidth = this.elapsedReserve();
+    const rowHeight = this.rowHeight();
+    const order: readonly CommandDeckGroupId[] = this.groups
+      ? this.groups.flat()
+      : [...COMMAND_DECK_CONTROL_IDS];
+    const clusterOf = new Map<CommandDeckGroupId, number>();
+    this.groups?.forEach((cluster, index) => {
+      for (const id of cluster) clusterOf.set(id, index);
+    });
+
     this.sendButton.width = 64;
     this.playButton.width = 72;
     this.timeline.width = 140;
     this.rate.width = 72;
     this.labButton.width = 112;
-    this.input.setPosition(PADDING, y);
-    this.input.width = Math.max(
-      1,
-      this.width -
-        PADDING * 2 -
-        this.sendButton.width -
-        this.playButton.width -
-        this.timeline.width -
-        elapsedWidth -
-        this.rate.width -
-        this.labButton.width -
-        GAP * 6,
-    );
-    this.sendButton.setPosition(this.input.x + this.input.width + GAP, y);
-    this.playButton.setPosition(this.sendButton.x + this.sendButton.width + GAP, y);
-    this.timeline.setPosition(this.playButton.x + this.playButton.width + GAP, y);
     this.elapsed.a11yHidden = false;
     this.elapsed.opacity = 1;
-    this.elapsed.width = elapsedWidth;
-    this.elapsed.setPosition(this.timeline.x + this.timeline.width + GAP, y + 10);
-    this.rate.setPosition(this.elapsed.x + this.elapsed.width + GAP, y);
-    this.labButton.setPosition(this.rate.x + this.rate.width + GAP, y);
+    this.elapsed.height = rowHeight;
+    const widths: Record<CommandDeckGroupId, number> = {
+      input: 0, // flexible; resolved last from whatever width remains
+      send: this.sendButton.width,
+      play: this.playButton.width,
+      timeline: this.timeline.width,
+      elapsed: this.elapsedReserve(),
+      rate: this.rate.width,
+      lab: this.labButton.width,
+    };
+
+    /** Gap ahead of `order[index]`; 0 ahead of the first control. */
+    const boundaryGap = (index: number): number => {
+      if (index === 0) return 0;
+      const sameCluster = clusterOf.get(order[index - 1]!) === clusterOf.get(order[index]);
+      return this.groups && !sameCluster ? this.groupGap : GAP;
+    };
+
+    let reserved = 0;
+    for (let i = 0; i < order.length; i++) reserved += widths[order[i]!];
+    for (let i = 1; i < order.length; i++) reserved += boundaryGap(i);
+    this.input.width = Math.max(1, this.width - PADDING * 2 - reserved);
+
+    const entityOf: Record<CommandDeckGroupId, Entity> = {
+      input: this.input,
+      send: this.sendButton,
+      play: this.playButton,
+      timeline: this.timeline,
+      elapsed: this.elapsed,
+      rate: this.rate,
+      lab: this.labButton,
+    };
+    for (const id of order) {
+      entityOf[id].width = id === 'input' ? this.input.width : widths[id];
+    }
+    let x = PADDING;
+    for (let i = 0; i < order.length; i++) {
+      const id = order[i]!;
+      if (i > 0) x += boundaryGap(i);
+      entityOf[id].setPosition(x, id === 'elapsed' ? y + this.elapsedOffset() : y);
+      x += entityOf[id].width;
+    }
   }
 
   private layoutCompact(): void {
     const playbackY = PADDING;
-    const commentY = 57;
+    const commentY = this.commentY();
     const innerWidth = Math.max(1, this.width - PADDING * 2);
     const playWidth = 64;
     const rateWidth = 64;
@@ -580,7 +709,10 @@ export class DanmakuCommandDeck extends Entity {
     this.elapsed.a11yHidden = !showElapsed;
     this.elapsed.opacity = showElapsed ? 1 : 0;
     this.elapsed.width = elapsedWidth;
-    this.elapsed.setPosition(this.timeline.x + timelineWidth + GAP, playbackY + 10);
+    this.elapsed.setPosition(
+      this.timeline.x + timelineWidth + GAP,
+      playbackY + this.elapsedOffset(),
+    );
     this.rate.width = rateWidth;
     this.rate.setPosition(
       showElapsed ? this.elapsed.x + elapsedWidth + GAP : this.timeline.x + timelineWidth + GAP,
@@ -593,6 +725,29 @@ export class DanmakuCommandDeck extends Entity {
     this.sendButton.setPosition(this.width - PADDING - this.sendButton.width, commentY);
     this.input.setPosition(PADDING, commentY);
     this.input.width = Math.max(1, this.sendButton.x - GAP - PADDING);
+  }
+
+  private rowHeight(): number {
+    const requested = this.theme.controlHeight;
+    return requested !== undefined && Number.isFinite(requested)
+      ? Math.max(MIN_CONTROL_HEIGHT, requested)
+      : DEFAULT_ROW_HEIGHT;
+  }
+
+  private desktopHeight(): number {
+    return this.rowHeight() + PADDING * 2;
+  }
+
+  private commentY(): number {
+    return PADDING + this.rowHeight() + COMPACT_ROW_GAP_PX;
+  }
+
+  private compactHeight(): number {
+    return this.commentY() + this.rowHeight() + COMPACT_ROW_GAP_PX;
+  }
+
+  private elapsedOffset(): number {
+    return Math.round((this.rowHeight() / DEFAULT_ROW_HEIGHT) * ELAPSED_ROW_OFFSET_PX);
   }
 
   private setButtonLabel(button: Button, label: string): void {

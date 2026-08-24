@@ -25,11 +25,37 @@ export interface DanmakuLabDrawerOptions<TabId extends string> {
   onActiveTabChange: (tabId: TabId) => void;
 }
 
+/**
+ * The concrete container one injected panel rides in (Entity is abstract).
+ * It exists so the duck-typed panel itself never becomes the node that
+ * `Tabs.add()` adopts and `Entity.destroy()` tears down — see
+ * {@link DanmakuLabDrawer.panelWrappers}. Pure geometry holder: it claims no
+ * points of its own (children are hit-tested by the scene walk) and paints
+ * nothing (the panel renders itself).
+ */
+class PanelSlot extends Entity {
+  override isPointInside(): boolean {
+    return false;
+  }
+
+  override render(_renderer: IRenderer): void {}
+}
+
 /** A placement-agnostic drawer surface that keeps injected panel instances alive. */
 export class DanmakuLabDrawer<TabId extends string> extends UIComponent {
   private readonly title: Text;
   private readonly closeButton: Button;
   private readonly tabs: Tabs;
+  /**
+   * One real Entity per injected panel, handed to {@link Tabs} as the tab
+   * content instead of the panel itself. Tabs adopts whatever content it is
+   * given via `add()` on every tree sync, and `Entity.destroy()`'s leaf-first
+   * teardown calls `.destroy()` on every child, so the adopted node must be a
+   * well-behaved Entity even though the kit only duck-types its panels. The
+   * wrapper is that contract enforcement point: the panel stays owned by the
+   * wrapper for its whole life, so tab switches never re-parent it.
+   */
+  private readonly panelWrappers: ReadonlyMap<TabId, Entity>;
   private open: boolean;
 
   constructor(private readonly options: DanmakuLabDrawerOptions<TabId>) {
@@ -60,12 +86,24 @@ export class DanmakuLabDrawer<TabId extends string> extends UIComponent {
     });
     this.closeButton.width = Math.min(120, Math.max(72, this.closeButton.textWidth + 24));
 
+    // Each panel rides inside its own wrapper Entity (see panelWrappers): the
+    // wrapper is what Tabs adopts, so the duck-typed panel itself never
+    // crosses an engine boundary that assumes Entity semantics. The wrapper
+    // owns the panel permanently, so tab switches swap wrappers in and out
+    // without ever re-parenting the panel.
+    this.panelWrappers = new Map(
+      options.panels.map((tab) => {
+        const wrapper = new PanelSlot();
+        wrapper.add(tab.panel);
+        return [tab.id, wrapper] as const;
+      }),
+    );
     this.tabs = new Tabs({
       label: options.labels.title,
       tabs: options.panels.map((tab) => ({
         id: tab.id,
         label: tab.label,
-        content: tab.panel,
+        content: this.panelWrappers.get(tab.id)!,
       })),
       value: options.activeTab,
       width: 1,
@@ -135,6 +173,16 @@ export class DanmakuLabDrawer<TabId extends string> extends UIComponent {
     for (const tab of this.options.panels) tab.panel.setAvailableBounds(panelBounds);
     this.tabs.update(0, 0);
     this.scene?.markDirty();
+  }
+
+  override destroy(): void {
+    // Only the active wrapper hangs off Tabs; the inactive ones are held by
+    // panelWrappers alone. Destroying every wrapper here tears down each
+    // injected panel exactly once (Entity.destroy() is idempotent) and
+    // detaches the active one from Tabs before super.destroy() walks the
+    // remaining tree.
+    for (const wrapper of this.panelWrappers.values()) wrapper.destroy();
+    super.destroy();
   }
 
   get isOpen(): boolean {

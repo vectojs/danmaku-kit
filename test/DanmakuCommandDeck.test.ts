@@ -2,11 +2,14 @@ import { describe, expect, it, mock } from 'bun:test';
 import type { IRenderer } from '@vectojs/core';
 import { Button, Dropdown, Input, measureText, Slider, Text } from '@vectojs/ui';
 import {
+  COMMAND_DECK_CONTROL_IDS,
   DanmakuCommandDeck,
+  type CommandDeckBounds,
+  type CommandDeckGroupId,
   type CommandDeckLayoutSnapshot,
 } from '../src/ui/command/DanmakuCommandDeck';
 import { DEFAULT_DANMAKU_KIT_LABELS } from '../src/ui/labels';
-import { DEFAULT_DANMAKU_KIT_THEME } from '../src/ui/theme';
+import { DEFAULT_DANMAKU_KIT_THEME, type DanmakuKitTheme } from '../src/ui/theme';
 
 interface Calls {
   sent: string[];
@@ -184,7 +187,13 @@ describe('DanmakuCommandDeck', () => {
     expect(calls.seeks).toEqual([42]);
     expect(calls.rates).toEqual([2]);
 
-    deck.setPlaybackState({ currentTime: 0, duration: 0, playing: false, rate: 1, disabled: true });
+    deck.setPlaybackState({
+      currentTime: 0,
+      duration: 0,
+      playing: false,
+      rate: 1,
+      disabled: true,
+    });
     expect(play.disabled).toBe(true);
     expect(timeline.getA11yAttributes().disabled).toBe(true);
     expect(rate.getA11yAttributes().disabled).toBe(true);
@@ -209,7 +218,12 @@ describe('DanmakuCommandDeck', () => {
   it('re-measures the elapsed label when durations grow and keeps every rate option clear', () => {
     const { deck } = createDeck(900);
     const { rate, elapsed } = controls(deck);
-    const rateLabels: Record<number, string> = { 0.5: '0.5×', 1: '1×', 1.5: '1.5×', 2: '2×' };
+    const rateLabels: Record<number, string> = {
+      0.5: '0.5×',
+      1: '1×',
+      1.5: '1.5×',
+      2: '2×',
+    };
 
     // '12:34 / 84:00' paints far wider than the legacy fixed reserves; each
     // rate option must sit clear of the painted glyphs in every state.
@@ -269,6 +283,213 @@ describe('DanmakuCommandDeck', () => {
 
     expect(lab.label).toBe(DEFAULT_DANMAKU_KIT_LABELS.command.closeLab);
     expect(calls.lab).toBe(1);
-    expect(markDirty).toHaveBeenCalledWith({ entity: deck.id, reason: 'lab-toggled' });
+    expect(markDirty).toHaveBeenCalledWith({
+      entity: deck.id,
+      reason: 'lab-toggled',
+    });
+  });
+});
+type DeckOptions = ConstructorParameters<typeof DanmakuCommandDeck>[0];
+
+/** Records every renderer call so tests can assert paint order and arguments. */
+function recordingRenderer(): {
+  calls: Array<{ op: string; args: unknown[] }>;
+  renderer: Parameters<DanmakuCommandDeck['render']>[0];
+} {
+  const calls: Array<{ op: string; args: unknown[] }> = [];
+  const renderer = new Proxy(
+    {},
+    {
+      get:
+        (_target, op) =>
+        (...args: unknown[]) => {
+          calls.push({ op: String(op), args });
+        },
+    },
+  ) as Parameters<DanmakuCommandDeck['render']>[0];
+  return { calls, renderer };
+}
+
+function createDeckWith(overrides: Partial<DeckOptions>, width = 900): DanmakuCommandDeck {
+  return new DanmakuCommandDeck({
+    width,
+    labels: DEFAULT_DANMAKU_KIT_LABELS,
+    theme: DEFAULT_DANMAKU_KIT_THEME,
+    callbacks: {
+      onSend: () => undefined,
+      onPlayPause: () => undefined,
+      onSeek: () => undefined,
+      onRateChange: () => undefined,
+      onToggleLab: () => undefined,
+    },
+    ...overrides,
+  } as DeckOptions);
+}
+
+/** Compose / transport / utility, the clustering bakudan's review asked for. */
+const CLUSTERS: CommandDeckGroupId[][] = [
+  ['input', 'send'],
+  ['play', 'timeline', 'elapsed'],
+  ['rate', 'lab'],
+];
+
+describe('DanmakuCommandDeck grouping (#15)', () => {
+  it('renders byte-identical geometry without groups or under an identity partition', () => {
+    const plain = createDeck(760).deck;
+    const identity = createDeckWith(
+      {
+        groups: COMMAND_DECK_CONTROL_IDS.map((id) => [id]),
+      },
+      760,
+    );
+
+    expect(identity.layoutSnapshot()).toEqual(plain.layoutSnapshot());
+    expect(identity.height).toBe(plain.height);
+  });
+
+  it('widens only the declared cluster boundaries on the desktop row', () => {
+    const deck = createDeckWith({ groups: CLUSTERS, groupGap: 24 });
+    const snapshot = expectBoundedAndNonOverlapping(deck);
+    const { elapsed } = controls(deck);
+    const gapAfter = (left: CommandDeckBounds, rightX: number) => rightX - (left.x + left.width);
+
+    expect(gapAfter(snapshot.input, snapshot.send.x)).toBe(8);
+    expect(gapAfter(snapshot.send, snapshot.play.x)).toBe(24);
+    expect(gapAfter(snapshot.play, snapshot.timeline.x)).toBe(8);
+    expect(gapAfter(snapshot.timeline, elapsed.x)).toBe(8);
+    expect(snapshot.rate.x).toBeGreaterThanOrEqual(elapsed.x + elapsed.width + 24);
+    expect(gapAfter(snapshot.rate, snapshot.lab.x)).toBe(8);
+    expect(new Set(Object.values(snapshot).map((bound) => bound.y))).toEqual(new Set([8]));
+    expect(elapsed.y).toBe(snapshot.play.y + 10);
+  });
+
+  it('rejects invalid group partitions at construction', () => {
+    expect(() => createDeckWith({ groups: [] })).toThrow();
+    expect(() => createDeckWith({ groups: [['input'], ['input']] })).toThrow();
+    expect(() =>
+      createDeckWith({
+        groups: [
+          ['input', 'send'],
+          ['play', 'timeline', 'rate', 'lab'],
+        ],
+      }),
+    ).toThrow(); // omits elapsed
+    expect(() =>
+      createDeckWith({
+        groups: [['input', 'send'], ['play', 'timeline', 'elapsed'], [], ['rate', 'lab']],
+      }),
+    ).toThrow(); // empty cluster
+    expect(() =>
+      createDeckWith({
+        groups: [
+          ['scrubber' as CommandDeckGroupId, 'send'],
+          ['play', 'timeline', 'elapsed', 'rate', 'lab', 'input'],
+        ],
+      }),
+    ).toThrow(); // unknown id
+  });
+
+  it('keeps the compact two-row shape even when grouped', () => {
+    const plain = createDeck(340).deck;
+    const grouped = createDeckWith({ groups: CLUSTERS, groupGap: 32 }, 340);
+
+    plain.setCompact(true);
+    grouped.setCompact(true);
+
+    expect(grouped.layoutSnapshot()).toEqual(plain.layoutSnapshot());
+    expect(grouped.height).toBe(106);
+  });
+
+  it('clamps groupGap to at least the intra-cluster gap', () => {
+    const deck = createDeckWith({ groups: CLUSTERS, groupGap: 2 });
+    const snapshot = deck.layoutSnapshot();
+
+    expect(snapshot.play.x - (snapshot.send.x + snapshot.send.width)).toBe(8);
+  });
+
+  it('keeps cluster rhythm when a growing duration relayouts the row', () => {
+    const deck = createDeckWith({ groups: CLUSTERS, groupGap: 24 });
+    const before = deck.layoutSnapshot();
+
+    deck.setPlaybackState({
+      currentTime: 754,
+      duration: 5040,
+      playing: true,
+      rate: 1,
+      disabled: false,
+    });
+    const after = deck.layoutSnapshot();
+    const { elapsed } = controls(deck);
+
+    // The wider "12:34 / 1:24:00" label grows the elapsed reserve, and the
+    // flexible input absorbs it: everything right of the transport cluster
+    // keeps its position, so the cluster boundaries stay exactly 24px.
+    expect(after.input.width).toBeLessThan(before.input.width);
+    expect(after.rate.x).toBeGreaterThanOrEqual(elapsed.x + elapsed.width + 24);
+    expect(after.rate.x).toBe(before.rate.x);
+    expect(after.lab.x).toBe(before.lab.x);
+    expectBoundedAndNonOverlapping(deck);
+  });
+});
+
+describe('DanmakuCommandDeck controlHeight token (#16b)', () => {
+  const TALL_THEME: DanmakuKitTheme = {
+    ...DEFAULT_DANMAKU_KIT_THEME,
+    controlHeight: 36,
+  };
+
+  function createThemedDeck(theme: DanmakuKitTheme): DanmakuCommandDeck {
+    return createDeckWith({ theme }, 760);
+  }
+
+  it('derives every dependent container literal from the token', () => {
+    const deck = createThemedDeck(TALL_THEME);
+
+    expect(deck.height).toBe(52); // row 36 + padding 2x8, was 56 at the default
+    const snapshot = deck.layoutSnapshot();
+    for (const bound of Object.values(snapshot)) expect(bound.height).toBe(36);
+    const { elapsed } = controls(deck);
+    expect(elapsed.height).toBe(36);
+    expect(elapsed.y).toBe(snapshot.play.y + 9); // proportional label centering
+
+    deck.setCompact(true);
+    expect(deck.height).toBe(98); // commentY 53 (= 8+36+9) + row 36 + gap 9, was 106
+    expect(deck.layoutSnapshot().input.y).toBe(53);
+  });
+
+  it('clamps sub-floor values to the readable minimum', () => {
+    const deck = createThemedDeck({
+      ...DEFAULT_DANMAKU_KIT_THEME,
+      controlHeight: 4,
+    });
+
+    expect(deck.height).toBe(40); // floor 24 + padding 16
+    expect(Object.values(deck.layoutSnapshot())[0]!.height).toBe(24);
+  });
+
+  it('falls back to the historical default for absent or non-finite tokens', () => {
+    expect(createThemedDeck(DEFAULT_DANMAKU_KIT_THEME).height).toBe(56);
+    expect(
+      createThemedDeck({
+        ...DEFAULT_DANMAKU_KIT_THEME,
+        controlHeight: Number.NaN,
+      }).height,
+    ).toBe(56);
+  });
+});
+
+describe('surface token reachability (#16c)', () => {
+  it('paints the deck plate straight from theme.surface', () => {
+    const sentinel = 'rgba(9, 11, 17, 0.62)';
+    const deck = createDeckWith({
+      theme: { ...DEFAULT_DANMAKU_KIT_THEME, surface: sentinel },
+    });
+    const { calls, renderer } = recordingRenderer();
+
+    deck.render(renderer);
+
+    const fills = calls.filter((call) => call.op === 'fill');
+    expect(fills.length).toBeGreaterThan(0);
+    expect(fills[0]!.args[0]).toBe(sentinel);
   });
 });
