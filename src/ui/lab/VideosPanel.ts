@@ -44,6 +44,12 @@ export interface VideosPanelLabels {
   customSource: string;
   choose: string;
   retry: string;
+  /**
+   * Label for the optional local-file upload button. Read only when
+   * {@link VideosPanelOptions.onUploadFile} is set; when omitted, an English
+   * default keeps the projected button named for screen readers.
+   */
+  uploadFile?: string;
   loadState: string;
   formatLoadState: (state: Readonly<Exclude<VideoLoadState, { status: 'error' }>>) => string;
   formatLoadError: (error: Readonly<VideoSourceError>, candidateId: string | undefined) => string;
@@ -65,9 +71,47 @@ export interface VideosPanelOptions<ProfileId extends string> {
   onChoose: (selection: Readonly<VideosPanelSelection<ProfileId>>) => void;
   onRetry: () => void;
   onCustomUrlChange?: (url: string) => void;
+  /**
+   * Called when the user picks a local video file through the upload button.
+   *
+   * The button is rendered only when this is set. Activation opens a transient
+   * detached `<input type="file">` picker restricted to `accept="video/*"` and
+   * hands the raw `File` straight through: the kit owns the picking mechanism,
+   * not what happens to the bytes. Object-URL lifecycle belongs to the
+   * consumer — create and revoke any `URL.createObjectURL(file)` yourself; the
+   * panel keeps no reference once the callback returns.
+   */
+  onUploadFile?: (file: File) => void;
 }
 
 const CUSTOM_SOURCE_VALUE = 'custom';
+const DEFAULT_UPLOAD_FILE_LABEL = 'Upload local file';
+
+/**
+ * Open a one-shot file picker and route the first picked file to `onPick`.
+ *
+ * A fresh detached input per activation keeps disposal trivial: nothing
+ * persists between clicks, a cancelled picker leaves only a self-referencing
+ * node for the GC, and the `once` listener detaches itself after the first
+ * change. Clearing `value` before dispatching additionally lets re-picking the
+ * same file fire again even where an input is reused.
+ */
+function openLocalVideoPicker(onPick: (file: File) => void): void {
+  if (typeof document === 'undefined') return;
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'video/*';
+  input.addEventListener(
+    'change',
+    () => {
+      const file = input.files?.[0];
+      input.value = '';
+      if (file) onPick(file);
+    },
+    { once: true },
+  );
+  input.click();
+}
 
 export class VideosPanel<ProfileId extends string> extends LabPanel<VideosPanelState<ProfileId>> {
   private readonly sourceGroup: RadioGroup;
@@ -79,6 +123,7 @@ export class VideosPanel<ProfileId extends string> extends LabPanel<VideosPanelS
   private readonly loadState: Text;
   private readonly chooseButton: Button;
   private readonly retryButton: Button;
+  private readonly uploadButton: Button | undefined;
   private readonly texts: Text[] = [];
 
   private pendingSource: VideoSelection;
@@ -130,6 +175,22 @@ export class VideosPanel<ProfileId extends string> extends LabPanel<VideosPanelS
       },
     });
     this.content.add(this.customUrlInput);
+
+    const { onUploadFile } = options;
+    if (onUploadFile) {
+      this.uploadButton = new Button(options.labels.uploadFile ?? DEFAULT_UPLOAD_FILE_LABEL, {
+        width: 1,
+        height: 40,
+        bg: options.theme.surfaceRaised,
+        hoverBg: options.theme.border,
+        color: options.theme.text,
+        font: options.theme.fontUi,
+        radius: options.theme.radius,
+        focusColor: options.theme.focusRing,
+        onClick: () => openLocalVideoPicker(onUploadFile),
+      });
+      this.content.add(this.uploadButton);
+    }
 
     this.addHeading(options.labels.profiles);
     this.profileGroup = new RadioGroup({
@@ -216,6 +277,7 @@ export class VideosPanel<ProfileId extends string> extends LabPanel<VideosPanelS
 
   protected override layoutContent(contentWidth: number): void {
     this.customUrlInput.width = contentWidth;
+    if (this.uploadButton) this.uploadButton.width = contentWidth;
     this.chooseButton.width = contentWidth;
     this.retryButton.width = contentWidth;
     for (const text of this.texts) text.setMaxWidth(contentWidth);
