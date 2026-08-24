@@ -30,6 +30,14 @@ const DESKTOP_HEIGHT = 34;
 const COMPACT_HEIGHT = 44;
 const HORIZONTAL_PADDING = 12;
 
+/**
+ * Dot-mode geometry: the status dot's radius and the horizontal room it adds
+ * ahead of the label. The dot sits 11px into the pill so a 3px dot leaves a
+ * comfortable margin to both the rounded cap and the shifted label.
+ */
+const STATUS_DOT_RADIUS_PX = 3;
+const STATUS_DOT_EXTRA_PX = 10;
+
 export class DanmakuStatusBar extends Entity {
   private readonly product: string;
   private readonly labels: DanmakuKitLabels;
@@ -153,8 +161,12 @@ export class DanmakuStatusBar extends Entity {
     const text = forcedColors ? 'CanvasText' : this.theme.text;
     const mutedText = forcedColors ? 'CanvasText' : this.theme.textMuted;
     const signal = forcedColors ? 'Highlight' : this.stateColor();
+    // Dot mode is an ordinary-theme affordance only: forced colors must paint
+    // system colors exclusively, and 'Highlight' already carries the state.
+    const dotMode = !forcedColors && (this.theme.statusDot ?? false);
+    const pillStroke = dotMode ? border : signal;
     const stateLabel = this.statusLabel();
-    const pillWidth = this.stateTextWidth + 16;
+    const pillWidth = this.stateTextWidth + 16 + (dotMode ? STATUS_DOT_EXTRA_PX : 0);
 
     renderer.beginPath();
     renderer.roundRect(0, 0, this.width, this.height, this.theme.radius);
@@ -163,21 +175,21 @@ export class DanmakuStatusBar extends Entity {
 
     renderer.beginPath();
     renderer.roundRect(0, this.height - 2, this.width, 2, 1);
-    renderer.fill(signal);
+    renderer.fill(pillStroke);
 
     if (this.compact) {
       renderer.fillText(this.product, HORIZONTAL_PADDING, 16, this.theme.fontDisplay, text);
+      const pillX = this.width - HORIZONTAL_PADDING - pillWidth;
       renderer.beginPath();
-      renderer.roundRect(this.width - HORIZONTAL_PADDING - pillWidth, 5, pillWidth, 18, 9);
+      renderer.roundRect(pillX, 5, pillWidth, 18, 9);
       renderer.fill(surface);
-      renderer.stroke(signal, 1);
-      renderer.fillText(
-        stateLabel,
-        this.width - HORIZONTAL_PADDING - pillWidth + 8,
-        18,
-        this.theme.fontLabel,
-        text,
-      );
+      renderer.stroke(pillStroke, 1);
+      if (dotMode) {
+        renderer.beginPath();
+        renderer.arc(pillX + 11, 14, STATUS_DOT_RADIUS_PX, 0, Math.PI * 2);
+        renderer.fill(signal);
+      }
+      renderer.fillText(stateLabel, pillX + (dotMode ? 17 : 8), 18, this.theme.fontLabel, text);
       renderer.fillText(
         this.labels.status.activeSummary(this.active, this.capacity),
         HORIZONTAL_PADDING,
@@ -202,8 +214,13 @@ export class DanmakuStatusBar extends Entity {
     renderer.beginPath();
     renderer.roundRect(stateX, 7, pillWidth, 20, 10);
     renderer.fill(surface);
-    renderer.stroke(signal, 1);
-    renderer.fillText(stateLabel, stateX + 8, 21, this.theme.fontLabel, text);
+    renderer.stroke(pillStroke, 1);
+    if (dotMode) {
+      renderer.beginPath();
+      renderer.arc(stateX + 11, 17, STATUS_DOT_RADIUS_PX, 0, Math.PI * 2);
+      renderer.fill(signal);
+    }
+    renderer.fillText(stateLabel, stateX + (dotMode ? 17 : 8), 21, this.theme.fontLabel, text);
 
     const metricX = stateX + pillWidth + 16;
     renderer.fillText(
