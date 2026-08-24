@@ -32,7 +32,9 @@ function createVideosPanel(callbacks: {
   choices: unknown[];
   retries: number[];
   customUrls: string[];
+  uploads?: File[];
 }): VideosPanel<'balanced' | 'dense'> {
+  const uploads = callbacks.uploads;
   return new VideosPanel({
     theme: DEFAULT_DANMAKU_KIT_THEME,
     labels: {
@@ -93,7 +95,62 @@ function createVideosPanel(callbacks: {
     onChoose: (selection) => callbacks.choices.push(selection),
     onRetry: () => callbacks.retries.push(1),
     onCustomUrlChange: (url) => callbacks.customUrls.push(url),
+    ...(uploads ? { onUploadFile: (file: File) => uploads.push(file) } : null),
   });
+}
+
+/**
+ * Bun tests run DOM-free, so the picker handshake is exercised against a
+ * recorded fake `<input>` installed as `document`. Each `createElement('input')`
+ * yields a fresh record whose `click()` counts activations and whose captured
+ * change listeners the test fires manually.
+ */
+interface RecordedFileInput {
+  type: string;
+  accept: string;
+  value: string;
+  files?: File[];
+  clickCount: number;
+  changeListeners: Array<() => void>;
+  click(): void;
+  addEventListener(type: string, listener: () => void): void;
+}
+
+function installFakeDocument(created: RecordedFileInput[]): void {
+  const fakeDocument = {
+    createElement(tag: string): RecordedFileInput | { getContext(): null } {
+      // @vectojs/ui measures text through a 2d canvas context when it sees a
+      // document; a null context sends it down the same metrics fallback it
+      // uses DOM-free, keeping the rest of the panel construction honest.
+      if (tag === 'canvas') return { getContext: () => null };
+      if (tag !== 'input') throw new Error(`unexpected element: ${tag}`);
+      const input: RecordedFileInput = {
+        type: '',
+        accept: '',
+        value: '',
+        files: undefined,
+        clickCount: 0,
+        changeListeners: [],
+        click() {
+          input.clickCount += 1;
+        },
+        addEventListener(type, listener) {
+          if (type === 'change') input.changeListeners.push(listener);
+        },
+      };
+      created.push(input);
+      return input;
+    },
+  };
+  Object.defineProperty(globalThis, 'document', { configurable: true, value: fakeDocument });
+}
+
+function uninstallFakeDocument(): void {
+  Reflect.deleteProperty(globalThis, 'document');
+}
+
+function fireChange(input: RecordedFileInput): void {
+  for (const listener of input.changeListeners) listener();
 }
 
 function createThroughputPanel(callbacks: {
@@ -247,6 +304,60 @@ describe('laboratory panels', () => {
     expect(callbacks.retries).toEqual([1]);
     expect(callbacks.customUrls).toEqual(['https://media.invalid/custom.mp4']);
     expect(labelledControlNames(panel)).not.toContain(undefined);
+  });
+
+  test('VideosPanel upload affordance hands picked local videos through onUploadFile', () => {
+    const inputs: RecordedFileInput[] = [];
+    installFakeDocument(inputs);
+    try {
+      const uploads: File[] = [];
+      const panel = createVideosPanel({ choices: [], retries: [], customUrls: [], uploads });
+      panel.setAvailableBounds({ width: 374, height: 560 });
+      const upload = descendants(panel).find(
+        (entity): entity is Button =>
+          entity instanceof Button && entity.getA11yAttributes().label === 'Upload local file',
+      )!;
+      expect(upload.getA11yAttributes()).toMatchObject({
+        role: 'button',
+        label: 'Upload local file',
+      });
+
+      const clip = new File(['clip-bytes'], 'holiday.mp4', { type: 'video/mp4' });
+      upload.dispatchEvent(new VectoJSEvent('click', upload));
+      const [first] = inputs;
+      expect(first).toMatchObject({ type: 'file', accept: 'video/*' });
+      expect(first!.clickCount).toBe(1);
+      expect(uploads).toEqual([]);
+
+      first!.files = [clip];
+      fireChange(first!);
+      expect(uploads).toEqual([clip]);
+      expect(first!.value).toBe('');
+
+      upload.dispatchEvent(new VectoJSEvent('click', upload));
+      const second = inputs[1]!;
+      second.files = [clip];
+      fireChange(second);
+      expect(uploads).toEqual([clip, clip]);
+
+      upload.dispatchEvent(new VectoJSEvent('click', upload));
+      inputs[2]!.files = [];
+      fireChange(inputs[2]!);
+      expect(uploads).toEqual([clip, clip]);
+    } finally {
+      uninstallFakeDocument();
+    }
+  });
+
+  test('VideosPanel renders no upload affordance without onUploadFile', () => {
+    const panel = createVideosPanel({ choices: [], retries: [], customUrls: [] });
+    panel.setAvailableBounds({ width: 374, height: 560 });
+    expect(
+      descendants(panel).some(
+        (entity) =>
+          entity instanceof Button && entity.getA11yAttributes().label === 'Upload local file',
+      ),
+    ).toBe(false);
   });
 
   test('ThroughputPanel consumes injected metrics and routes only control values', () => {
